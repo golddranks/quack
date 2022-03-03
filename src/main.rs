@@ -1,11 +1,13 @@
-use std::{io, path::Path, env::args_os};
+use std::{env::args_os, io, path::Path};
 
-use crate::elf::{parse_elf_from, ElfParse, ElfFile64, SectHead, Sym};
+use crate::elf::{parse_elf_from, ElfFile64, ElfParse, SectHead, Sym};
 
 mod elf;
 
 fn main() -> Result<(), Error> {
-    let path = args_os().nth(1).ok_or(Error::new("provide a binary file"))?;
+    let path = args_os()
+        .nth(1)
+        .ok_or(Error::new("provide a binary file"))?;
 
     let elf = parse_elf_from(Path::new(&path))?;
     match elf {
@@ -17,7 +19,7 @@ fn main() -> Result<(), Error> {
             sh_names: Some(sh_names),
             symtab: Some(symtab),
             sym_names: Some(sym_names),
-         }) => {
+        }) => {
             println!("{:?}", eh);
             for ph in phs {
                 println!("{:?}", ph);
@@ -26,9 +28,13 @@ fn main() -> Result<(), Error> {
                 println!("{} {:?}", String::from_utf8_lossy(sh.name(&sh_names)?), sh);
             }
             for sym in symtab {
-                println!("{} {:?}", String::from_utf8_lossy(sym.name(&sym_names)?), sym);
+                println!(
+                    "{} {:?}",
+                    String::from_utf8_lossy(sym.name(&sym_names)?),
+                    sym
+                );
             }
-        },
+        }
         e => eprintln!("No elf with symbol table etc: {:?}", e),
     }
     Ok(())
@@ -41,9 +47,7 @@ pub struct Error {
 
 impl Error {
     fn new(s: &'static str) -> Error {
-        Error {
-            s,
-        }
+        Error { s }
     }
 }
 
@@ -53,8 +57,6 @@ fn e<T>(s: &'static str) -> Result<T, Error> {
 
 impl From<io::Error> for Error {
     fn from(_: io::Error) -> Self {
-        Error {
-            s: "io::Error",
-        }
+        Error { s: "io::Error" }
     }
 }
