@@ -72,14 +72,14 @@ fn main() -> Result<(), Error> {
 
     let elf = parse_elf_from(Path::new(&path))?;
     match elf {
-        ElfParse::Elf32(_, _, _) => unimplemented!(),
-        ElfParse::Elf64(eh, phs, shs) => {
+        ElfParse::Elf32(_, _, _, _, _) => unimplemented!(),
+        ElfParse::Elf64(eh, phs, shs, sh_name_ranges, sh_name_str) => {
             println!("{:?}", eh);
             for ph in phs {
                 println!("{:?}", ph);
             }
-            for sh in shs {
-                println!("{:?}", sh);
+            for (sh, range) in shs.iter().zip(sh_name_ranges) {
+                println!("{} {:?}", String::from_utf8_lossy(&sh_name_str[range]), sh);
             }
         },
     }
@@ -99,7 +99,7 @@ impl Error {
     }
 }
 
-fn e(s: &'static str) -> Result<(), Error> {
+fn e<T>(s: &'static str) -> Result<T, Error> {
     Err(Error::new(s))
 }
 

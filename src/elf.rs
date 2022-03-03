@@ -1,5 +1,5 @@
 use core::{intrinsics::transmute, mem::size_of};
-use std::{path::Path, fs::File, io::{Read, BufReader, Seek, SeekFrom}};
+use std::{path::Path, fs::File, io::{Read, BufReader, Seek, SeekFrom}, ops::Range};
 
 use crate::{Error, e};
 
@@ -148,10 +148,6 @@ impl ElfNonArchDep {
         if self.e_ident.ei_pad != [0; 7] {
             return e("invalid elf.header.e_ident.ei_pad");
         }
-        if self.e_type != 0x02 {
-            dbg!(self);
-            return e("quack doesn't support other file types than executables.");
-        }
         if self.e_machine != 0x3e {
             return e("quack doesn't support other archs than x86-64");
         }
@@ -218,6 +214,8 @@ impl ElfHead32 {
             reader.read_exact(sh.as_slice_mut())?;
             v.push(sh);
         }
+        let shstrs = &v[self.tail.e_shstrndx as usize];
+        println!("SectHead strings: {:?}", shstrs);
         Ok(v)
     }
 }
@@ -243,6 +241,25 @@ impl ElfHead64 {
         }
         Ok(v)
     }
+}
+
+fn sh_names<T: SectHead>(eh_tail: &ElfNonArchDep2, sh: &[T], reader: &mut (impl Read + Seek)) -> Result<(Vec<Range<usize>>, Vec<u8>), Error> {
+    let shstrs = &sh[eh_tail.e_shstrndx as usize];
+    if shstrs.sh_type() != 3 {
+        return e("e_shstrndx and shstr section sh_type don't match");
+    }
+    reader.seek(SeekFrom::Start(shstrs.offset() as u64))?;
+    let mut strs = Vec::new();
+    strs.resize(shstrs.size() as usize, 0);
+    reader.read_exact(&mut strs)?;
+    let mut ranges = Vec::new();
+    let mut l = 0;
+    for str in strs.split_inclusive(|&b| b == b'\0') {
+        let r = l + str.len();
+        ranges.push(l..r);
+        l = r;
+    }
+    Ok((ranges, strs))
 }
 
 #[repr(C)]
@@ -296,7 +313,7 @@ pub struct SectHead32 {
     head: SectNonArchDep,
     sh_flags: u32,
     sh_addr: u32,
-    sh_offet: u32,
+    sh_offset: u32,
     sh_size: u32,
     sh_link: u32,
     sh_info: u32,
@@ -310,12 +327,49 @@ pub struct SectHead64 {
     head: SectNonArchDep,
     sh_flags: u64,
     sh_addr: u64,
-    sh_offet: u64,
+    sh_offset: u64,
     sh_size: u64,
     sh_link: u32,
     sh_info: u32,
     sh_addralign: u64,
     sh_entsize: u64,
+}
+
+trait SectHead {
+    fn name(&self) -> usize;
+    fn sh_type(&self) -> usize;
+    fn offset(&self) -> usize;
+    fn size(&self) -> usize;
+}
+
+impl SectHead for SectHead32 {
+    fn name(&self) -> usize {
+        self.head.sh_name as usize
+    }
+    fn sh_type(&self) -> usize{
+        self.head.sh_type as usize
+    }
+    fn offset(&self) -> usize{
+        self.sh_offset as usize
+    }
+    fn size(&self) -> usize{
+        self.sh_size as usize
+    }
+}
+
+impl SectHead for SectHead64 {
+    fn name(&self) -> usize {
+        self.head.sh_name as usize
+    }
+    fn sh_type(&self) -> usize{
+        self.head.sh_type as usize
+    }
+    fn offset(&self) -> usize{
+        self.sh_offset as usize
+    }
+    fn size(&self) -> usize{
+        self.sh_size as usize
+    }
 }
 
 impl SectHead32 {
@@ -332,8 +386,8 @@ impl SectHead64 {
 
 
 pub enum ElfParse {
-    Elf32(ElfHead32, Vec<ProgHead32>, Vec<SectHead32>),
-    Elf64(ElfHead64, Vec<ProgHead64>, Vec<SectHead64>),
+    Elf32(ElfHead32, Vec<ProgHead32>, Vec<SectHead32>, Vec<Range<usize>>, Vec<u8>),
+    Elf64(ElfHead64, Vec<ProgHead64>, Vec<SectHead64>, Vec<Range<usize>>, Vec<u8>),
 }
 
 
@@ -343,12 +397,14 @@ pub fn parse_elf(reader: &mut (impl Read + Seek)) -> Result<ElfParse, Error> {
         ElfArchDep::EH32(eh) => {
             let phs = eh.prog_headers(reader)?;
             let shs = eh.sect_headers(reader)?;
-            Ok(ElfParse::Elf32(eh, phs, shs))
+            let (sh_name_ranges, sh_name_str) = sh_names(&eh.tail, &shs, reader)?;
+            Ok(ElfParse::Elf32(eh, phs, shs, sh_name_ranges, sh_name_str))
         },
         ElfArchDep::EH64(eh) => {
             let phs = eh.prog_headers(reader)?;
             let shs = eh.sect_headers(reader)?;
-            Ok(ElfParse::Elf64(eh, phs, shs))
+            let (sh_name_ranges, sh_name_str) = sh_names(&eh.tail, &shs, reader)?;
+            Ok(ElfParse::Elf64(eh, phs, shs, sh_name_ranges, sh_name_str))
         },
     }
 }
