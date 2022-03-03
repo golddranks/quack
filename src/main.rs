@@ -50,7 +50,7 @@ fn maps() -> Result<(), Error> {
 
 fn main() -> Result<(), Error> {
 
-    #[cfg(linux)]
+    #[cfg(target_os = "linux")]
     maps()?;
 
     let mut mem = RunMem::new(1);
