@@ -9,6 +9,11 @@ pub unsafe trait TransmuteSafe: Default + Clone {
     }
 }
 
+fn vec_as_bytes_mut<T: TransmuteSafe>(vec: &mut Vec<T>, n: usize) -> &mut [u8] {
+    vec.resize(n, T::default());
+    unsafe { from_raw_parts_mut(vec.as_mut_ptr() as *mut u8, n * size_of::<T>()) }
+}
+
 unsafe impl TransmuteSafe for ElfNonArchDep {}
 unsafe impl TransmuteSafe for Elf32Offs {}
 unsafe impl TransmuteSafe for Elf64Offs {}
@@ -19,13 +24,6 @@ unsafe impl TransmuteSafe for SectHead32 {}
 unsafe impl TransmuteSafe for SectHead64 {}
 unsafe impl TransmuteSafe for Sym32 {}
 unsafe impl TransmuteSafe for Sym64 {}
-
-fn vec_as_bytes_mut<T: TransmuteSafe>(vec: &mut Vec<T>, n: usize) -> &mut [u8] {
-    unsafe {
-        vec.resize(n, T::default());
-        from_raw_parts_mut(vec.as_mut_ptr() as *mut u8, n * size_of::<T>())
-    }
-}
 
 #[repr(C)]
 #[derive(Default, Debug, Clone)]
@@ -412,7 +410,7 @@ impl Strings {
         if offset == 0 {
             return Ok(&self.buf[0..1]);
         }
-        if offset >= self.buf.len() || self.buf[offset-1] != b'\0' {
+        if offset >= self.buf.len() {
             return e("invalid offset");
         }
         let end = offset + self.buf[offset..].iter()
