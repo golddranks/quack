@@ -1,10 +1,8 @@
 use std::fmt::Debug;
 
 use crate::{
-    elf::{
-        ffi_types::{EIOsAbi, EIOsAbiUnchecked, EType, ETypeUnchecked, EMachine, EMachineUnchecked, PType, PTypeUnchecked, ShType, ShTypeUnchecked},
-        ToKnown,
-    },
+    elf::parse::ffi_types::{EIOsAbi, EIOsAbiUnchecked, EType, ETypeUnchecked, EMachine, EMachineUnchecked, PType, PTypeUnchecked, ShType, ShTypeUnchecked},
+    utils::ToKnown,
 };
 
 impl ToKnown for EIOsAbiUnchecked {
@@ -209,7 +207,7 @@ impl PartialEq for ShTypeUnchecked {
 
 #[test]
 fn miri_enum() {
-    use crate::elf::TransmuteSafe;
+    use crate::elf::parse::TransmuteSafe;
 
     let mut ei_osabi = EIOsAbiUnchecked::default();
     for i in 0..0xFFu8 {

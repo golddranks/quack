@@ -1,8 +1,15 @@
-use std::{env::args_os, io, path::Path};
-
-use crate::elf::{parse_elf_from, ElfFile64, ElfParse, SectHead, Sym, StType};
+use std::{env::args_os, io, fs::File};
 
 mod elf;
+mod utils;
+
+use crate::elf::parse::{ElfFile64, ElfParse, SectHead, Sym, StType};
+
+// TODO:
+// Load and run ELF
+// Patch symbols
+// Rust demangling
+// Mach-O support
 
 fn main() {
     match run() {
@@ -18,17 +25,19 @@ fn run() -> Result<(), Error> {
         .nth(1)
         .ok_or(Error::new("provide a binary file"))?;
 
-    let elf = parse_elf_from(Path::new(&path))?;
+    let mut reader = File::open(path)?;
+    let elf = elf::parse::with(&mut reader)?;
     match elf {
         ElfParse::Elf32(_) => unimplemented!(),
         ElfParse::Elf64(ElfFile64 {
-            eh,
+            eh: _,
             phs,
-            shs: Some(shs),
-            sh_names: Some(sh_names),
+            shs: Some(_shs),
+            sh_names: Some(_sh_names),
             symtab: Some(symtab),
             sym_names: Some(sym_names),
         }) => {
+            elf::load::load(&phs, &mut reader);
             for sym in symtab {
                 if let Ok(StType::Func) = sym.st_type() {
                     println!(

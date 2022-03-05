@@ -114,7 +114,7 @@ pub struct ElfHead64 {
 #[repr(C)]
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct ProgHead64 {
-    pub(super) p_type: u32,
+    pub(super) p_type: PTypeUnchecked,
     pub(super) p_flag: u32,
     pub(super) p_offset: u64,
     pub(super) p_vaddr: u64,
@@ -248,7 +248,7 @@ pub struct Sym64 {
 // - are repr(C)
 // - don't contain any gaps in theyr memory layout
 // - consists only of types with no
-use crate::elf::TransmuteSafe;
+use crate::utils::TransmuteSafe;
 
 
 unsafe impl TransmuteSafe for ElfNonArchDep {}
@@ -347,7 +347,7 @@ fn miri_as_bytes_mut() {
 
 #[test]
 fn miri_vec_as_bytes_mut() {
-    use crate::elf::vec_as_bytes_mut;
+    use crate::utils::vec_as_bytes_mut;
     use rand::Fill;
     fn test<T: TransmuteSafe>() -> Vec<T> {
         let mut vec = Vec::new();
