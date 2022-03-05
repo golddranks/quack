@@ -44,7 +44,7 @@ fn run() -> Result<(), Error> {
     Ok(())
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Error {
     s: &'static str,
 }

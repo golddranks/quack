@@ -383,7 +383,7 @@ fn find_sh_by<'a, T: SectHead>(
     name: &[u8],
 ) -> Result<Option<&'a T>, Error> {
     for sh in shs {
-        if sh.sh_type()? == sh_type && sh.name(sh_names)? == name {
+        if sh.sh_type() == Ok(sh_type) && sh.name(sh_names)? == name {
             return Ok(Some(sh));
         }
     }
