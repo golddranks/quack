@@ -1,3 +1,6 @@
+use std::{mem, fs::File, ptr::null_mut, slice::from_raw_parts_mut, io::Read};
+
+use crate::Error;
 
 const RET: i32 = 0xc3;
 
@@ -32,7 +35,7 @@ impl RunMem {
     }
 }
 
-fn maps() -> Result<(), Error> {
+pub fn maps() -> Result<(), Error> {
     let mut maps = File::open("/proc/self/maps")?;
     let mut buf = Vec::new();
     maps.read_to_end(&mut buf)?;
