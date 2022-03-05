@@ -4,7 +4,16 @@ use crate::elf::{parse_elf_from, ElfFile64, ElfParse, SectHead, Sym};
 
 mod elf;
 
-fn main() -> Result<(), Error> {
+fn main() {
+    match run() {
+        Ok(_) => (),
+        Err(e) => {
+            eprintln!("{}", e.s)
+        }
+    }
+}
+
+fn run() -> Result<(), Error> {
     let path = args_os()
         .nth(1)
         .ok_or(Error::new("provide a binary file"))?;
@@ -35,7 +44,7 @@ fn main() -> Result<(), Error> {
                 );
             }
         }
-        e => eprintln!("No elf with symbol table etc: {:?}", e),
+        _ => return e("no elf with symbol table etc."),
     }
     Ok(())
 }

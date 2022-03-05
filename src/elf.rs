@@ -6,91 +6,54 @@ use std::{
     path::Path,
 };
 
+mod enum_impls;
+mod ffi_types;
+#[cfg(test)]
+mod test;
+
 use crate::{e, Error};
 
+use ffi_types::{
+    Elf32Offs, Elf64Offs, ElfHead32, ElfHead64, ElfNonArchDep, ElfNonArchDep2, ProgHead32,
+    ProgHead64, SectHead32, SectHead64, Sym32, Sym64,
+};
+
+trait ToChecked {
+    type Checked;
+    type Unchecked;
+    fn check(&self) -> Result<Self::Checked, Error>;
+    fn unchecked(&self) -> Self::Unchecked;
+}
+
 pub unsafe trait TransmuteSafe: Default + Clone {
-    fn as_bytes_mut(self: &mut Self) -> &mut [u8] {
+    fn as_bytes_mut(&mut self) -> &mut [u8] {
+        // This unsafe is sound because:
+        // - Self is TransmuteSafe
+        // - TransmuteSafe is an unsafe trait that guarantees that Self allows any byte pattern
+        // - [u8] has alignment of 1, which is always less or equal than Self's alignment
+        // - the size of [u8] is set to equal the size of Self in bytes
+        // - The mutable access to the bytes of Self is constrained by the lifetime of &mut self
+        // - Accepting &mut Self as an argument guarantees that its bytes are already initialized
         unsafe { from_raw_parts_mut(self as *mut Self as *mut u8, size_of::<Self>()) }
     }
 }
 
-fn vec_as_bytes_mut<T: TransmuteSafe>(vec: &mut Vec<T>, n: usize) -> &mut [u8] {
+pub fn vec_as_bytes_mut<T: TransmuteSafe>(vec: &mut Vec<T>, n: usize) -> &mut [u8] {
+    vec.clear();
     vec.resize(n, T::default());
+    // This unsafe is sound because:
+    // - vec is reserved to have a buffer that is large enough to fit the all Ts
+    // - The buffer is filled with T::default() so all the bytes are initialized
+    // - Self is TransmuteSafe
+    // - TransmuteSafe is an unsafe trait that guarantees that Self allows any byte pattern
+    // - [u8] has alignment of 1, which is always less or equal than Self's alignment
+    // - The mutable access to the bytes of Self is constrained by the lifetime of &mut self
     unsafe { from_raw_parts_mut(vec.as_mut_ptr() as *mut u8, n * size_of::<T>()) }
 }
 
-unsafe impl TransmuteSafe for ElfNonArchDep {}
-unsafe impl TransmuteSafe for Elf32Offs {}
-unsafe impl TransmuteSafe for Elf64Offs {}
-unsafe impl TransmuteSafe for ElfNonArchDep2 {}
-unsafe impl TransmuteSafe for ProgHead32 {}
-unsafe impl TransmuteSafe for ProgHead64 {}
-unsafe impl TransmuteSafe for SectHead32 {}
-unsafe impl TransmuteSafe for SectHead64 {}
-unsafe impl TransmuteSafe for Sym32 {}
-unsafe impl TransmuteSafe for Sym64 {}
-
-#[repr(C)]
-#[derive(Default, Debug, Clone)]
-struct EIdent {
-    ei_mag: [u8; 4],
-    ei_class: u8,
-    ei_data: u8,
-    ei_version: u8,
-    ei_osabi: u8,
-    ei_abiversion: u8,
-    ei_pad: [u8; 7],
-}
-
-#[repr(C)]
-#[derive(Default, Debug, Clone)]
-struct ElfNonArchDep {
-    e_ident: EIdent,
-    e_type: u16,
-    e_machine: u16,
-    e_version: u32,
-}
-
-#[repr(C)]
-#[derive(Default, Debug, Clone)]
-struct Elf32Offs {
-    e_entry: u32,
-    e_phoff: u32,
-    e_shoff: u32,
-}
-
-#[repr(C)]
-#[derive(Default, Debug, Clone)]
-struct Elf64Offs {
-    e_entry: u64,
-    e_phoff: u64,
-    e_shoff: u64,
-}
-
-#[repr(C)]
-#[derive(Default, Debug, Clone)]
-struct ElfNonArchDep2 {
-    e_flags: u32,
-    e_ehsize: u16,
-    e_phentsize: u16,
-    e_phnum: u16,
-    e_shentsize: u16,
-    e_shnum: u16,
-    e_shstrndx: u16,
-}
-
-#[derive(Debug)]
-pub struct ElfHead32 {
-    head: ElfNonArchDep,
-    offs: Elf32Offs,
-    tail: ElfNonArchDep2,
-}
-
-#[derive(Debug)]
-pub struct ElfHead64 {
-    head: ElfNonArchDep,
-    offs: Elf64Offs,
-    tail: ElfNonArchDep2,
+#[derive(Debug, Clone, PartialEq)]
+pub struct Strings {
+    buf: Vec<u8>,
 }
 
 trait ElfHead {
@@ -131,6 +94,19 @@ trait ElfHead {
     }
 }
 
+pub trait SectHead: Debug {
+    type SymTab: TransmuteSafe;
+    fn name<'a>(&self, str: &'a Strings) -> Result<&'a [u8], Error>;
+    fn sh_type(&self) -> usize;
+    fn offset(&self) -> usize;
+    fn size(&self) -> usize;
+    fn entsize(&self) -> usize;
+}
+
+pub trait Sym: Debug {
+    fn name<'a>(&self, str: &'a Strings) -> Result<&'a [u8], Error>;
+}
+
 impl ElfHead for ElfHead32 {
     type Offs = Elf32Offs;
     type SectHead = SectHead32;
@@ -165,82 +141,6 @@ impl ElfHead for ElfHead64 {
     fn shnum(&self) -> usize {
         self.tail.e_shnum as usize
     }
-}
-
-#[derive(Debug)]
-enum ElfHeadType {
-    EH32(ElfHead32),
-    EH64(ElfHead64),
-}
-
-#[repr(C)]
-#[derive(Default, Debug, Clone)]
-pub struct ProgHead64 {
-    p_type: u32,
-    p_flag: u32,
-    p_offset: u64,
-    p_vaddr: u64,
-    p_paddr: u64,
-    p_filesz: u64,
-    p_memsz: u64,
-    p_align: u64,
-}
-
-#[repr(C)]
-#[derive(Default, Debug, Clone)]
-pub struct ProgHead32 {
-    p_type: u32,
-    p_offset: u32,
-    p_vaddr: u32,
-    p_paddr: u32,
-    p_filesz: u32,
-    p_memsz: u32,
-    p_flag: u32,
-    p_align: u32,
-}
-
-#[repr(C)]
-#[derive(Default, Debug, Clone)]
-struct SectNonArchDep {
-    sh_name: u32,
-    sh_type: u32,
-}
-
-#[repr(C)]
-#[derive(Default, Debug, Clone)]
-pub struct SectHead32 {
-    head: SectNonArchDep,
-    sh_flags: u32,
-    sh_addr: u32,
-    sh_offset: u32,
-    sh_size: u32,
-    sh_link: u32,
-    sh_info: u32,
-    sh_addralign: u32,
-    sh_entsize: u32,
-}
-
-#[repr(C)]
-#[derive(Default, Debug, Clone)]
-pub struct SectHead64 {
-    head: SectNonArchDep,
-    sh_flags: u64,
-    sh_addr: u64,
-    sh_offset: u64,
-    sh_size: u64,
-    sh_link: u32,
-    sh_info: u32,
-    sh_addralign: u64,
-    sh_entsize: u64,
-}
-
-pub trait SectHead: Debug {
-    type SymTab: TransmuteSafe;
-    fn name<'a>(&self, str: &'a Strings) -> Result<&'a [u8], Error>;
-    fn sh_type(&self) -> usize;
-    fn offset(&self) -> usize;
-    fn size(&self) -> usize;
-    fn entsize(&self) -> usize;
 }
 
 impl SectHead for SectHead32 {
@@ -279,37 +179,6 @@ impl SectHead for SectHead64 {
     fn entsize(&self) -> usize {
         self.sh_entsize as usize
     }
-}
-
-#[derive(Debug)]
-pub struct Strings {
-    buf: Vec<u8>,
-}
-
-#[repr(C)]
-#[derive(Default, Debug, Clone)]
-pub struct Sym32 {
-    st_name: u32,
-    st_value: u32,
-    st_size: u32,
-    st_info: u8,
-    st_other: u8,
-    st_shndx: u16,
-}
-
-#[repr(C)]
-#[derive(Default, Debug, Clone)]
-pub struct Sym64 {
-    st_name: u32,
-    st_info: u8,
-    st_other: u8,
-    st_shndx: u16,
-    st_value: u64,
-    st_size: u64,
-}
-
-pub trait Sym: Debug {
-    fn name<'a>(&self, str: &'a Strings) -> Result<&'a [u8], Error>;
 }
 
 impl Sym for Sym32 {
@@ -369,6 +238,12 @@ impl ElfNonArchDep2 {
         }
         Ok(())
     }
+}
+
+#[derive(Debug)]
+enum ElfHeadType {
+    EH32(ElfHead32),
+    EH64(ElfHead64),
 }
 
 impl ElfHeadType {
@@ -490,7 +365,7 @@ pub struct ElfFile32 {
     pub sym_names: Option<Strings>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ElfFile64 {
     pub eh: ElfHead64,
     pub phs: Vec<ProgHead64>,
