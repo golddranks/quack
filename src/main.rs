@@ -2,6 +2,7 @@ use std::{env::args_os, io, fs::File};
 
 mod elf;
 mod utils;
+mod runmem;
 
 use crate::elf::parse::{ElfFile64, ElfParse, Sym, StType};
 
@@ -24,6 +25,9 @@ fn run() -> Result<(), Error> {
     let path = args_os()
         .nth(1)
         .ok_or(Error::new("provide a binary file"))?;
+    
+    #[cfg(all(target_os="linux", target_arch="x86_64"))]
+    runmem::maps();
 
     let mut reader = File::open(path)?;
     let elf = elf::parse::with(&mut reader)?;
