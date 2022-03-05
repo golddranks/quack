@@ -15,21 +15,12 @@ pub fn probe() {
 #[cfg(all(target_os="linux", target_arch="x86_64"))]
 pub fn load(phs: &[impl ProgHead], reader: &mut (impl Read + Seek)) {
     for ph in phs {
-        unsafe {
-            asm!(
-                "mov {tmp}, {x}",
-                "shl {tmp}, 1",
-                "shl {x}, 2",
-                "add {x}, {tmp}",
-                x = inout(reg) x,
-                tmp = out(reg) _,
-            );
-        }
+        /*
         unsafe {
             libc::mmap(ph.vaddr() as *mut c_void,
                 ph.filesz(),
                 PROT_READ | PROT_WRITE,
                 MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
-        }
+        }*/
     }
 }
