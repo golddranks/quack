@@ -3,7 +3,7 @@ use std::{env::args_os, io, fs::File};
 mod elf;
 mod utils;
 
-use crate::elf::parse::{ElfFile64, ElfParse, SectHead, Sym, StType};
+use crate::elf::parse::{ElfFile64, ElfParse, Sym, StType};
 
 // TODO:
 // Load and run ELF
@@ -37,6 +37,9 @@ fn run() -> Result<(), Error> {
             symtab: Some(symtab),
             sym_names: Some(sym_names),
         }) => {
+            #[cfg(target_arch="x86_64")]
+            elf::load::probe();
+            #[cfg(all(target_os="linux", target_arch="x86_64"))]
             elf::load::load(&phs, &mut reader);
             for sym in symtab {
                 if let Ok(StType::Func) = sym.st_type() {
