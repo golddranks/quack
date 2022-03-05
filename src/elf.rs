@@ -18,11 +18,13 @@ use ffi_types::{
     ProgHead64, SectHead32, SectHead64, Sym32, Sym64,
 };
 
-trait ToChecked {
-    type Checked;
-    type Unchecked;
-    fn check(&self) -> Result<Self::Checked, Error>;
-    fn unchecked(&self) -> Self::Unchecked;
+use self::ffi_types::{EMachine, ShType};
+
+trait ToKnown: TransmuteSafe {
+    type Known;
+    type Unknown;
+    fn known(&self) -> Result<Self::Known, Self::Unknown>;
+    fn unknown(&self) -> Self::Unknown;
 }
 
 pub unsafe trait TransmuteSafe: Default + Clone {
@@ -97,7 +99,7 @@ trait ElfHead {
 pub trait SectHead: Debug {
     type SymTab: TransmuteSafe;
     fn name<'a>(&self, str: &'a Strings) -> Result<&'a [u8], Error>;
-    fn sh_type(&self) -> usize;
+    fn sh_type(&self) -> Result<ShType, Error>;
     fn offset(&self) -> usize;
     fn size(&self) -> usize;
     fn entsize(&self) -> usize;
@@ -148,8 +150,11 @@ impl SectHead for SectHead32 {
     fn name<'a>(&self, str: &'a Strings) -> Result<&'a [u8], Error> {
         Ok(str.get_string(self.head.sh_name as usize)?)
     }
-    fn sh_type(&self) -> usize {
-        self.head.sh_type as usize
+    fn sh_type(&self) -> Result<ShType, Error> {
+        match self.head.sh_type.known() {
+            Ok(o) => Ok(o),
+            Err(_) => e("unknown sh_type"),
+        }
     }
     fn offset(&self) -> usize {
         self.sh_offset as usize
@@ -167,8 +172,11 @@ impl SectHead for SectHead64 {
     fn name<'a>(&self, str: &'a Strings) -> Result<&'a [u8], Error> {
         Ok(str.get_string(self.head.sh_name as usize)?)
     }
-    fn sh_type(&self) -> usize {
-        self.head.sh_type as usize
+    fn sh_type(&self) -> Result<ShType, Error> {
+        match self.head.sh_type.known() {
+            Ok(o) => Ok(o),
+            Err(_) => e("unknown sh_type"),
+        }
     }
     fn offset(&self) -> usize {
         self.sh_offset as usize
@@ -215,7 +223,7 @@ impl ElfNonArchDep {
         if self.e_ident.ei_pad != [0; 7] {
             return e("invalid elf.header.e_ident.ei_pad");
         }
-        if self.e_machine != 0x3e {
+        if self.e_machine.known() != Ok(EMachine::X86_64) {
             return e("quack doesn't support other archs than x86-64");
         }
         if self.e_version != 0x01 {
@@ -270,7 +278,7 @@ impl ElfHeadType {
 
 impl Strings {
     fn from<T: SectHead>(reader: &mut (impl Read + Seek), str_head: &T) -> Result<Strings, Error> {
-        if str_head.sh_type() != 3 {
+        if str_head.sh_type()? != ShType::Strtab {
             return e("invalid sh_type for a string section");
         }
         reader.seek(SeekFrom::Start(str_head.offset() as u64))?;
@@ -313,11 +321,11 @@ fn sh_names<T: SectHead>(
 fn find_sh_by<'a, T: SectHead>(
     shs: &'a [T],
     sh_names: &Strings,
-    sh_type: usize,
+    sh_type: ShType,
     name: &[u8],
 ) -> Result<Option<&'a T>, Error> {
     for sh in shs {
-        if sh.sh_type() == sh_type && sh.name(sh_names)? == name {
+        if sh.sh_type()? == sh_type && sh.name(sh_names)? == name {
             return Ok(Some(sh));
         }
     }
@@ -329,7 +337,7 @@ fn symtab<T: SectHead>(
     shs: &[T],
     sh_names: &Strings,
 ) -> Result<Option<Vec<T::SymTab>>, Error> {
-    if let Some(symtab) = find_sh_by(shs, sh_names, 2, b".symtab")? {
+    if let Some(symtab) = find_sh_by(shs, sh_names, ShType::Symtab, b".symtab")? {
         if symtab.entsize() != size_of::<T::SymTab>() {
             return e("invalid symtab entity size");
         }
@@ -348,7 +356,7 @@ fn sym_names<T: SectHead>(
     shs: &[T],
     sh_names: &Strings,
 ) -> Result<Option<Strings>, Error> {
-    if let Some(strtab) = find_sh_by(shs, sh_names, 3, b".strtab")? {
+    if let Some(strtab) = find_sh_by(shs, sh_names, ShType::Strtab, b".strtab")? {
         Ok(Some(Strings::from(reader, strtab)?))
     } else {
         Ok(None)

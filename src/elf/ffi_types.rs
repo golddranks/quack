@@ -1,7 +1,5 @@
 use std::fmt::Debug;
 
-
-
 #[repr(C)]
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct EIdent {
@@ -14,26 +12,59 @@ pub struct EIdent {
     pub(super) ei_pad: [u8; 7],
 }
 
-#[derive(Copy, Clone)]
-pub union EIOsAbiUnchecked {
-    pub(super) unchecked: u8,
-    pub(super) checked: EIOsAbi,
-}
-
+#[allow(dead_code)] // These are actually constructed via type re-interpretation
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum EIOsAbi {
     SystemV = 0x00,
-    HpUx = 0x01,
+    Linux = 0x03,
+}
+
+#[derive(Copy, Clone)]
+pub union EIOsAbiUnchecked {
+    pub(super) unknown: u8,
+    pub(super) known: EIOsAbi,
 }
 
 #[repr(C)]
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct ElfNonArchDep {
     pub(super) e_ident: EIdent,
-    pub(super) e_type: u16,
-    pub(super) e_machine: u16,
+    pub(super) e_type: ETypeUnchecked,
+    pub(super) e_machine: EMachineUnchecked,
     pub(super) e_version: u32,
+}
+
+#[allow(dead_code)] // These are actually constructed via type re-interpretation
+#[repr(u16)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum EType {
+    None = 0x00,
+    Rel = 0x01,
+    Exec = 0x02,
+    Dyn = 0x03,
+    Core = 0x04,
+}
+
+#[derive(Copy, Clone)]
+pub union ETypeUnchecked {
+    pub(super) unknown: u16,
+    pub(super) known: EType,
+}
+
+#[allow(dead_code)] // These are actually constructed via type re-interpretation
+#[repr(u16)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum EMachine {
+    X86 = 0x03,
+    X86_64 = 0x3E,
+    Aarch64 = 0xB7,
+}
+
+#[derive(Copy, Clone)]
+pub union EMachineUnchecked {
+    pub(super) unknown: u16,
+    pub(super) known: EMachine,
 }
 
 #[repr(C)]
@@ -96,7 +127,7 @@ pub struct ProgHead64 {
 #[repr(C)]
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct ProgHead32 {
-    pub(super) p_type: u32,
+    pub(super) p_type: PTypeUnchecked,
     pub(super) p_offset: u32,
     pub(super) p_vaddr: u32,
     pub(super) p_paddr: u32,
@@ -106,11 +137,61 @@ pub struct ProgHead32 {
     pub(super) p_align: u32,
 }
 
+#[allow(dead_code)] // These are actually constructed via type re-interpretation
+#[repr(u32)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum PType {
+    Null = 0x00000000,
+    Load = 0x00000001,
+    Dynamic = 0x00000002,
+    Interp = 0x00000003,
+    Note = 0x00000004,
+    Shlib = 0x00000005,
+    Phdr = 0x00000006,
+    Tls = 0x00000007,
+}
+
+#[derive(Copy, Clone)]
+pub union PTypeUnchecked {
+    pub(super) unknown: u32,
+    pub(super) known: PType,
+}
+
 #[repr(C)]
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct SectNonArchDep {
     pub(super) sh_name: u32,
-    pub(super) sh_type: u32,
+    pub(super) sh_type: ShTypeUnchecked,
+}
+
+#[allow(dead_code)] // These are actually constructed via type re-interpretation
+#[repr(u32)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum ShType {
+    Null = 0x0,
+    Progbits = 0x1,
+    Symtab = 0x2,
+    Strtab = 0x3,
+    Rela = 0x4,
+    Hash = 0x5,
+    Dynamic = 0x6,
+    Note = 0x7,
+    Nobits = 0x8,
+    Rel = 0x9,
+    Shlib = 0x0A,
+    Dynsym = 0x0B,
+    InitArray = 0x0E,
+    FiniArray = 0x0F,
+    PreinitArray = 0x10,
+    Group = 0x11,
+    SymtabShndx = 0x12,
+    Num = 0x13,
+}
+
+#[derive(Copy, Clone)]
+pub union ShTypeUnchecked {
+    pub(super) unknown: u32,
+    pub(super) known: ShType,
 }
 
 #[repr(C)]
@@ -181,6 +262,12 @@ unsafe impl TransmuteSafe for SectHead64 {}
 unsafe impl TransmuteSafe for Sym32 {}
 unsafe impl TransmuteSafe for Sym64 {}
 
+unsafe impl TransmuteSafe for EIOsAbiUnchecked {}
+unsafe impl TransmuteSafe for ETypeUnchecked {}
+unsafe impl TransmuteSafe for EMachineUnchecked {}
+unsafe impl TransmuteSafe for PTypeUnchecked {}
+unsafe impl TransmuteSafe for ShTypeUnchecked {}
+
 // To ensure that there isn't any accidental padding etc.
 #[test]
 fn sizes_and_alignments() {
@@ -200,6 +287,15 @@ fn sizes_and_alignments() {
     assert_eq!(align_of::<Sym32>(), 4);
     assert_eq!(align_of::<Sym64>(), 8);
 
+    assert_eq!(align_of::<EIOsAbi>(), 1);
+    assert_eq!(align_of::<EIOsAbiUnchecked>(), 1);
+    assert_eq!(align_of::<EMachine>(), 2);
+    assert_eq!(align_of::<EMachineUnchecked>(), 2);
+    assert_eq!(align_of::<PType>(), 4);
+    assert_eq!(align_of::<PTypeUnchecked>(), 4);
+    assert_eq!(align_of::<ShType>(), 4);
+    assert_eq!(align_of::<ShTypeUnchecked>(), 4);
+
     assert_eq!(size_of::<EIdent>(), 16);
     assert_eq!(size_of::<ElfNonArchDep>(), 24);
     assert_eq!(size_of::<Elf32Offs>(), 12);
@@ -214,6 +310,15 @@ fn sizes_and_alignments() {
     assert_eq!(size_of::<SectHead64>(), 64);
     assert_eq!(size_of::<Sym32>(), 16);
     assert_eq!(size_of::<Sym64>(), 24);
+
+    assert_eq!(size_of::<EIOsAbi>(), 1);
+    assert_eq!(size_of::<EIOsAbiUnchecked>(), 1);
+    assert_eq!(size_of::<EMachine>(), 2);
+    assert_eq!(size_of::<EMachineUnchecked>(), 2);
+    assert_eq!(size_of::<PType>(), 4);
+    assert_eq!(size_of::<PTypeUnchecked>(), 4);
+    assert_eq!(size_of::<ShType>(), 4);
+    assert_eq!(size_of::<ShTypeUnchecked>(), 4);
 }
 
 #[test]
@@ -268,9 +373,56 @@ fn miri_vec_as_bytes_mut() {
 
 #[test]
 fn miri_enum() {
-    unsafe impl TransmuteSafe for EIOsAbiUnchecked {}
+    use crate::elf::ToKnown;
+
     let mut ei_osabi = EIOsAbiUnchecked::default();
-    let bytes = ei_osabi.as_bytes_mut();
-    bytes[0] = 0xFF;
-    eprintln!("{:?}", ei_osabi);
+    for i in 0..0xFFu8 {
+        let bytes = ei_osabi.as_bytes_mut();
+        bytes.copy_from_slice(&i.to_le_bytes());
+        assert_eq!(i, ei_osabi.unknown());
+        match ei_osabi.known() {
+            Ok(o) => assert_eq!(o as u8, i),
+            Err(e) => assert_eq!(e, i),
+        }
+    }
+    let mut e_type = ETypeUnchecked::default();
+    for i in 0..0x01FFu16 {
+        let bytes = e_type.as_bytes_mut();
+        bytes.copy_from_slice(&i.to_le_bytes());
+        assert_eq!(i, e_type.unknown());
+        match e_type.known() {
+            Ok(o) => assert_eq!(o as u16, i),
+            Err(e) => assert_eq!(e, i),
+        }
+    }
+    let mut e_machine = EMachineUnchecked::default();
+    for i in 0..0x01FFu16 {
+        let bytes = e_machine.as_bytes_mut();
+        bytes.copy_from_slice(&i.to_le_bytes());
+        assert_eq!(i, e_machine.unknown());
+        match e_machine.known() {
+            Ok(o) => assert_eq!(o as u16, i),
+            Err(e) => assert_eq!(e, i),
+        }
+    }
+    let mut p_type = PTypeUnchecked::default();
+    for i in 0..0x01FFu32 {
+        let bytes = p_type.as_bytes_mut();
+        bytes.copy_from_slice(&i.to_le_bytes());
+        assert_eq!(i, p_type.unknown());
+        match p_type.known() {
+            Ok(o) => assert_eq!(o as u32, i),
+            Err(e) => assert_eq!(e, i),
+        }
+    }
+    let mut sh_type = ShTypeUnchecked::default();
+    for i in 0..0x01FFu32 {
+        let bytes = sh_type.as_bytes_mut();
+        bytes.copy_from_slice(&i.to_le_bytes());
+        assert_eq!(i, sh_type.unknown());
+        match sh_type.known() {
+            Ok(o) => assert_eq!(o as u32, i),
+            Err(e) => assert_eq!(e, i),
+        }
+    }
 }
