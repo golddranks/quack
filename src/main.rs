@@ -1,6 +1,6 @@
 use std::{env::args_os, io, path::Path};
 
-use crate::elf::{parse_elf_from, ElfFile64, ElfParse, SectHead, Sym};
+use crate::elf::{parse_elf_from, ElfFile64, ElfParse, SectHead, Sym, StType};
 
 mod elf;
 
@@ -29,19 +29,14 @@ fn run() -> Result<(), Error> {
             symtab: Some(symtab),
             sym_names: Some(sym_names),
         }) => {
-            println!("{:?}", eh);
-            for ph in phs {
-                println!("{:?}", ph);
-            }
-            for sh in shs {
-                println!("{} {:?}", String::from_utf8_lossy(sh.name(&sh_names)?), sh);
-            }
             for sym in symtab {
-                println!(
-                    "{} {:?}",
-                    String::from_utf8_lossy(sym.name(&sym_names)?),
-                    sym
-                );
+                if let Ok(StType::Func) = sym.st_type() {
+                    println!(
+                        "{} {:?}",
+                        String::from_utf8_lossy(sym.name(&sym_names)?),
+                        sym.binding()?
+                    );
+                }
             }
         }
         _ => return e("no elf with symbol table etc."),

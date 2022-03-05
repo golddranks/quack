@@ -15,10 +15,8 @@ use crate::{e, Error};
 
 use ffi_types::{
     Elf32Offs, Elf64Offs, ElfHead32, ElfHead64, ElfNonArchDep, ElfNonArchDep2, ProgHead32,
-    ProgHead64, SectHead32, SectHead64, Sym32, Sym64,
+    ProgHead64, SectHead32, SectHead64, Sym32, Sym64, EMachine, ShType,
 };
-
-use self::ffi_types::{EMachine, ShType};
 
 trait ToKnown: TransmuteSafe {
     type Known;
@@ -105,8 +103,30 @@ pub trait SectHead: Debug {
     fn entsize(&self) -> usize;
 }
 
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StBind {
+    Local = 0,
+    Global = 1,
+    Weak = 2,
+}
+
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StType {
+    NoType = 0,
+    Object = 1,
+    Func = 2,
+    Section = 3,
+    File = 4,
+    Common = 5,
+    Tls = 6,
+}
+
 pub trait Sym: Debug {
     fn name<'a>(&self, str: &'a Strings) -> Result<&'a [u8], Error>;
+    fn binding(&self) -> Result<StBind, Error>;
+    fn st_type(&self) -> Result<StType, Error>;
 }
 
 impl ElfHead for ElfHead32 {
@@ -189,15 +209,53 @@ impl SectHead for SectHead64 {
     }
 }
 
+fn st_type(st_info: u8) -> Result<StType, Error>  {
+    Ok(match st_info & 0x0f {
+        0 => StType::NoType,
+        1 => StType::Object,
+        2 => StType::Func,
+        3 => StType::Section,
+        4 => StType::File,
+        5 => StType::Common,
+        6 => StType::Tls,
+        _ => return e("unknown symtab.st_type value"),
+    })
+}
+
+fn st_bind(st_info: u8) -> Result<StBind, Error> {
+    Ok(match st_info >> 4 {
+        0 => StBind::Local,
+        1 => StBind::Global,
+        2 => StBind::Weak,
+        _ => return e("unknown symtab.st_bind value"),
+    })
+}
+
 impl Sym for Sym32 {
     fn name<'a>(&self, str: &'a Strings) -> Result<&'a [u8], Error> {
         str.get_string(self.st_name as usize)
+    }
+
+    fn binding(&self) -> Result<StBind, Error> {
+        st_bind(self.st_info)
+    }
+
+    fn st_type(&self) -> Result<StType, Error> {
+        st_type(self.st_info)
     }
 }
 
 impl Sym for Sym64 {
     fn name<'a>(&self, str: &'a Strings) -> Result<&'a [u8], Error> {
         str.get_string(self.st_name as usize)
+    }
+
+    fn binding(&self) -> Result<StBind, Error> {
+        st_bind(self.st_info)
+    }
+
+    fn st_type(&self) -> Result<StType, Error> {
+        st_type(self.st_info)
     }
 }
 
