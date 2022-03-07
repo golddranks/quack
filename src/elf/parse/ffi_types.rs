@@ -4,12 +4,40 @@ use std::fmt::Debug;
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct EIdent {
     pub(super) ei_mag: [u8; 4],
-    pub(super) ei_class: u8,
-    pub(super) ei_data: u8,
+    pub(super) ei_class: EIClassUnchecked,
+    pub(super) ei_data: EIDataUnchecked,
     pub(super) ei_version: u8,
     pub(super) ei_osabi: EIOsAbiUnchecked,
     pub(super) ei_abiversion: u8,
     pub(super) ei_pad: [u8; 7],
+}
+
+#[allow(dead_code)] // These are actually constructed via type re-interpretation
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum EIClass {
+    Elf32Bit = 0x01,
+    Elf64Bit = 0x02,
+}
+
+#[derive(Copy, Clone)]
+pub union EIClassUnchecked {
+    pub(super) unknown: u8,
+    pub(super) known: EIClass,
+}
+
+#[allow(dead_code)] // These are actually constructed via type re-interpretation
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum EIData {
+    LittleEndian = 0x01,
+    BigEndian = 0x02,
+}
+
+#[derive(Copy, Clone)]
+pub union EIDataUnchecked {
+    pub(super) unknown: u8,
+    pub(super) known: EIData,
 }
 
 #[allow(dead_code)] // These are actually constructed via type re-interpretation
@@ -262,6 +290,8 @@ unsafe impl TransmuteSafe for SectHead64 {}
 unsafe impl TransmuteSafe for Sym32 {}
 unsafe impl TransmuteSafe for Sym64 {}
 
+unsafe impl TransmuteSafe for EIClassUnchecked {}
+unsafe impl TransmuteSafe for EIDataUnchecked {}
 unsafe impl TransmuteSafe for EIOsAbiUnchecked {}
 unsafe impl TransmuteSafe for ETypeUnchecked {}
 unsafe impl TransmuteSafe for EMachineUnchecked {}
@@ -287,6 +317,10 @@ fn sizes_and_alignments() {
     assert_eq!(align_of::<Sym32>(), 4);
     assert_eq!(align_of::<Sym64>(), 8);
 
+    assert_eq!(align_of::<EIClass>(), 1);
+    assert_eq!(align_of::<EIClassUnchecked>(), 1);
+    assert_eq!(align_of::<EIData>(), 1);
+    assert_eq!(align_of::<EIDataUnchecked>(), 1);
     assert_eq!(align_of::<EIOsAbi>(), 1);
     assert_eq!(align_of::<EIOsAbiUnchecked>(), 1);
     assert_eq!(align_of::<EMachine>(), 2);
@@ -311,6 +345,10 @@ fn sizes_and_alignments() {
     assert_eq!(size_of::<Sym32>(), 16);
     assert_eq!(size_of::<Sym64>(), 24);
 
+    assert_eq!(size_of::<EIClass>(), 1);
+    assert_eq!(size_of::<EIClassUnchecked>(), 1);
+    assert_eq!(size_of::<EIData>(), 1);
+    assert_eq!(size_of::<EIDataUnchecked>(), 1);
     assert_eq!(size_of::<EIOsAbi>(), 1);
     assert_eq!(size_of::<EIOsAbiUnchecked>(), 1);
     assert_eq!(size_of::<EMachine>(), 2);

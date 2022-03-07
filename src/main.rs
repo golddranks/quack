@@ -1,5 +1,26 @@
+#![no_std]
+#![no_main]
+
+#[cfg(all(target_os="linux", target_arch="x86_64"))]
+mod linux;
+
+pub struct Error;
+
+pub fn main() -> Result<(), Error> {
+    let file = linux::open("/proc/self/maps\0", linux::OpenMode::RdOnly)?;
+    let mut buf = [0; 2000];
+    linux::read(file, &mut buf[..])?;
+    linux::write(linux::STDOUT, buf)?;
+
+    linux::write(linux::STDOUT, "moikkaaaaa\n")?;
+    linux::write(linux::STDOUT, "moikkaaaaa\n")?;
+    Ok(())
+}
+
+/*
 use std::{env::args_os, io, fs::File};
 
+mod mmap;
 mod elf;
 mod utils;
 mod runmem;
@@ -34,13 +55,17 @@ fn run() -> Result<(), Error> {
     match elf {
         ElfParse::Elf32(_) => unimplemented!(),
         ElfParse::Elf64(ElfFile64 {
-            eh: _,
+            eh,
             phs,
             shs: Some(_shs),
             sh_names: Some(_sh_names),
             symtab: Some(symtab),
             sym_names: Some(sym_names),
         }) => {
+            println!("eh: {:?}", eh);
+            for ph in &phs {
+                println!("ph: {:?}", ph);
+            }
             #[cfg(target_arch="x86_64")]
             elf::load::probe();
             #[cfg(all(target_os="linux", target_arch="x86_64"))]
@@ -80,3 +105,4 @@ impl From<io::Error> for Error {
         Error { s: "io::Error" }
     }
 }
+*/

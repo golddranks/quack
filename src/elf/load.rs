@@ -8,9 +8,9 @@ use crate::elf::parse::ProgHead;
 pub fn probe() {
     let x: u64;
     unsafe { asm!("lea {}, [rip]", out(reg) x); }
-    eprintln!("{:?}", x);
-    eprintln!("{:?}", probe as fn() as u64);
-    eprintln!("main: {:?}", crate::main as fn() as u64);
+    eprintln!("{:x?}", x);
+    eprintln!("{:x?}", probe as fn() as u64);
+    eprintln!("main: {:x?}", crate::main as fn() as u64);
 }
 
 #[cfg(all(target_os="linux", target_arch="x86_64"))]

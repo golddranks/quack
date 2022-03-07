@@ -1,9 +1,45 @@
 use std::fmt::Debug;
 
 use crate::{
-    elf::parse::ffi_types::{EIOsAbi, EIOsAbiUnchecked, EType, ETypeUnchecked, EMachine, EMachineUnchecked, PType, PTypeUnchecked, ShType, ShTypeUnchecked},
+    elf::parse::ffi_types::{EIClass, EIClassUnchecked, EIData, EIDataUnchecked, EIOsAbi, EIOsAbiUnchecked, EType, ETypeUnchecked, EMachine, EMachineUnchecked, PType, PTypeUnchecked, ShType, ShTypeUnchecked},
     utils::ToKnown,
 };
+
+impl ToKnown for EIClassUnchecked {
+    type Known = EIClass;
+    type Unknown = u8;
+
+    fn known(&self) -> Result<Self::Known, Self::Unknown> {
+        let u = self.unknown();
+        if u == 0x01 || u == 0x02 {
+            Ok(unsafe { self.known })
+        } else {
+            Err(u)
+        }
+    }
+
+    fn unknown(&self) -> Self::Unknown {
+        unsafe { self.unknown }
+    }
+}
+
+impl ToKnown for EIDataUnchecked {
+    type Known = EIData;
+    type Unknown = u8;
+
+    fn known(&self) -> Result<Self::Known, Self::Unknown> {
+        let u = self.unknown();
+        if u == 0x01 || u == 0x02 {
+            Ok(unsafe { self.known })
+        } else {
+            Err(u)
+        }
+    }
+
+    fn unknown(&self) -> Self::Unknown {
+        unsafe { self.unknown }
+    }
+}
 
 impl ToKnown for EIOsAbiUnchecked {
     type Known = EIOsAbi;
@@ -95,6 +131,18 @@ impl ToKnown for ShTypeUnchecked {
     }
 }
 
+impl Default for EIClassUnchecked {
+    fn default() -> Self {
+        Self { unknown: 0 }
+    }
+}
+
+impl Default for EIDataUnchecked {
+    fn default() -> Self {
+        Self { unknown: 0 }
+    }
+}
+
 impl Default for EIOsAbiUnchecked {
     fn default() -> Self {
         Self { unknown: 0 }
@@ -125,12 +173,32 @@ impl Default for ShTypeUnchecked {
     }
 }
 
+impl Debug for EIClassUnchecked {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Ok(t) = self.known() {
+            t.fmt(f)
+        } else {
+            write!(f, "UnknownEIClass(0x{:X?})", self.unknown())
+        }
+    }
+}
+
+impl Debug for EIDataUnchecked {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Ok(t) = self.known() {
+            t.fmt(f)
+        } else {
+            write!(f, "UnknownEIData(0x{:X?})", self.unknown())
+        }
+    }
+}
+
 impl Debug for EIOsAbiUnchecked {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Ok(t) = self.known() {
             t.fmt(f)
         } else {
-            write!(f, "Unknown(0x{:X?})", self.unknown())
+            write!(f, "UnknownEIOsAbi(0x{:X?})", self.unknown())
         }
     }
 }
@@ -140,7 +208,7 @@ impl Debug for ETypeUnchecked {
         if let Ok(t) = self.known() {
             t.fmt(f)
         } else {
-            write!(f, "Unknown(0x{:X?})", self.unknown())
+            write!(f, "UnknownEType(0x{:X?})", self.unknown())
         }
     }
 }
@@ -150,7 +218,7 @@ impl Debug for EMachineUnchecked {
         if let Ok(t) = self.known() {
             t.fmt(f)
         } else {
-            write!(f, "Unknown(0x{:X?})", self.unknown())
+            write!(f, "UnknownEMachine(0x{:X?})", self.unknown())
         }
     }
 }
@@ -160,7 +228,7 @@ impl Debug for PTypeUnchecked {
         if let Ok(t) = self.known() {
             t.fmt(f)
         } else {
-            write!(f, "Unknown(0x{:X?})", self.unknown())
+            write!(f, "UnknownPType(0x{:X?})", self.unknown())
         }
     }
 }
@@ -170,11 +238,21 @@ impl Debug for ShTypeUnchecked {
         if let Ok(t) = self.known() {
             t.fmt(f)
         } else {
-            write!(f, "Unknown(0x{:X?})", self.unknown())
+            write!(f, "UnknownShType(0x{:X?})", self.unknown())
         }
     }
 }
 
+impl PartialEq for EIClassUnchecked {
+    fn eq(&self, other: &Self) -> bool {
+        self.unknown().eq(&other.unknown())
+    }
+}
+impl PartialEq for EIDataUnchecked {
+    fn eq(&self, other: &Self) -> bool {
+        self.unknown().eq(&other.unknown())
+    }
+}
 impl PartialEq for EIOsAbiUnchecked {
     fn eq(&self, other: &Self) -> bool {
         self.unknown().eq(&other.unknown())

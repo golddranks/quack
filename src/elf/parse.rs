@@ -12,11 +12,9 @@ mod test;
 use crate::{e, Error, utils::{ToKnown, TransmuteSafe, vec_as_bytes_mut}};
 
 use ffi_types::{
-    Elf32Offs, Elf64Offs, ElfHead32, ElfHead64, ElfNonArchDep, ElfNonArchDep2, ProgHead32,
+    EIData, EIClass, PType, Elf32Offs, Elf64Offs, ElfHead32, ElfHead64, ElfNonArchDep, ElfNonArchDep2, ProgHead32,
     ProgHead64, SectHead32, SectHead64, Sym32, Sym64, EMachine, ShType,
 };
-
-use self::ffi_types::PType;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Strings {
@@ -298,15 +296,15 @@ impl ElfNonArchDep {
         if self.e_ident.ei_mag != [0x7F, b'E', b'L', b'F'] {
             return e("invalid elf_header.e_ident.ei_mag");
         }
-        match self.e_ident.ei_class {
-            1 => return e("quack doesn't support 32-bit elfs"),
-            2 => (),
-            _ => return e("invalid elf_header.e_ident.ei_class"),
+        match self.e_ident.ei_class.known() {
+            Ok(EIClass::Elf32Bit) => return e("quack doesn't support 32-bit elfs"),
+            Ok(EIClass::Elf64Bit) => (),
+            Err(_) => return e("invalid elf_header.e_ident.ei_class"),
         }
-        match self.e_ident.ei_data {
-            1 => (),
-            2 => return e("quack doesn't support big-endian elfs"),
-            _ => return e("invalid elf_header.e_ident.ei_class"),
+        match self.e_ident.ei_data.known() {
+            Ok(EIData::LittleEndian) => (),
+            Ok(EIData::BigEndian) => return e("quack doesn't support big-endian elfs"),
+            Err(_) => return e("invalid elf_header.e_ident.ei_class"),
         }
         match self.e_ident.ei_version {
             1 => (),
@@ -351,18 +349,18 @@ impl ElfHeadType {
         let mut head = ElfNonArchDep::default();
         reader.read_exact(head.as_bytes_mut())?;
         head.check()?;
-        let eh = match head.e_ident.ei_class {
-            1 => {
+        let eh = match head.e_ident.ei_class.known() {
+            Ok(EIClass::Elf32Bit) => {
                 let offs = ElfHead32::offs(reader)?;
                 let tail = ElfHead32::tail(reader)?;
                 ElfHeadType::EH32(ElfHead32 { head, offs, tail })
             }
-            2 => {
+            Ok(EIClass::Elf64Bit) => {
                 let offs = ElfHead64::offs(reader)?;
                 let tail = ElfHead64::tail(reader)?;
                 ElfHeadType::EH64(ElfHead64 { head, offs, tail })
             }
-            _ => unreachable!(),
+            Err(_) => unreachable!(),
         };
         Ok(eh)
     }
