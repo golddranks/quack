@@ -2,7 +2,7 @@ use core::arch::asm;
 use crate::{os::Fd, Error};
 
 
-#[repr(i32)]
+#[repr(u32)]
 enum Syscall {
     Exit = 0x02000001,
     Read = 0x02000003,
@@ -16,7 +16,7 @@ pub fn exit(ret: u8) -> ! {
     unsafe {
         asm!(
             "syscall",
-            in("rax") Syscall::Exit as i64,
+            in("rax") Syscall::Exit as u32,
             in("rdi") ret as i64,
             out("rcx") _,
             out("r11") _,
@@ -32,7 +32,7 @@ pub fn write(fd: Fd, msg: impl AsRef<[u8]>) -> Result<usize, Error> {
     unsafe {
         asm!(
             "syscall",
-            in("rax") Syscall::Write as i64,
+            in("rax") Syscall::Write as u32,
             in("rdi") fd.0,
             in("rsi") msg.as_ptr(),
             in("rdx") msg.len(),
@@ -53,7 +53,7 @@ pub fn read(fd: Fd, buf: &mut [u8]) -> Result<usize, Error> {
     unsafe {
         asm!(
             "syscall",
-            in("rax") Syscall::Read as i64,
+            in("rax") Syscall::Read as u32,
             in("rdi") fd.0,
             in("rsi") buf.as_ptr(),
             in("rdx") buf.len(),
@@ -90,7 +90,7 @@ pub fn open(path: impl AsRef<[u8]>, mode: OpenMode) -> Result<Fd, Error> {
     unsafe {
         asm!(
             "syscall",
-            in("rax") Syscall::Open as i64,
+            in("rax") Syscall::Open as u32,
             in("rdi") path.as_ref().as_ptr(),
             in("rsi") mode as i64,
             in("rdx") 0,

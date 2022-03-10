@@ -1,22 +1,44 @@
 use core::arch::asm;
+use core::fmt::Write;
+use core::ffi::c_void;
+use core::slice;
 use crate::{os::Fd, Error};
 
+core::arch::global_asm!("
+.globl _start
+_start: mov    rdi, rsp # pass pointer to argc to start2; rdi is used for the first arg
+        and    rsp, 0xfffffffffffffff0 # align stack to 16 bytes; expected by x86-64 Linux C ABI
+        call   start2
+");
 
-#[repr(i32)]
+#[no_mangle]
+extern "C" fn start2(stack_start: *const c_void) -> ! {
+    let argc = unsafe { *(stack_start as *const usize) };
+    let argv: *const *const u8 = unsafe { (stack_start as *const *const u8).offset(1) };
+    let args: &[*const u8] = unsafe { slice::from_raw_parts(argv, argc) };
+    if let Err(_) = crate::main(args) {
+        let _ = write(crate::os::STDERR, "Error!\n");
+        exit(1)
+    } else {
+        exit(0)
+    }
+}
+
+#[repr(u32)]
 enum Syscall {
-    Read = 0x00000000,
-    Write = 0x00000001,
-    Open = 0x00000002,
-    Close = 0x00000003,
-    Mmap = 0x00000009,
-    Exit = 0x00000060,
+    Read = 0,
+    Write = 1,
+    Open = 2,
+    Close = 3,
+    Mmap = 9,
+    Exit = 60,
 }
 
 pub fn exit(ret: u8) -> ! {
     unsafe {
         asm!(
             "syscall",
-            in("rax") Syscall::Exit as i64,
+            in("rax") Syscall::Exit as u32,
             in("rdi") ret as i64,
             out("rcx") _,
             out("r11") _,
@@ -25,14 +47,13 @@ pub fn exit(ret: u8) -> ! {
     loop {}
 }
 
-
 pub fn write(fd: Fd, msg: impl AsRef<[u8]>) -> Result<usize, Error> {
     let msg = msg.as_ref();
     let ret: isize;
     unsafe {
         asm!(
             "syscall",
-            in("rax") Syscall::Write as i64,
+            in("rax") Syscall::Write as u32,
             in("rdi") fd.0,
             in("rsi") msg.as_ptr(),
             in("rdx") msg.len(),
@@ -53,7 +74,7 @@ pub fn read(fd: Fd, buf: &mut [u8]) -> Result<usize, Error> {
     unsafe {
         asm!(
             "syscall",
-            in("rax") Syscall::Read as i64,
+            in("rax") Syscall::Read as u32,
             in("rdi") fd.0,
             in("rsi") buf.as_ptr(),
             in("rdx") buf.len(),
@@ -89,7 +110,7 @@ pub fn open(path: impl AsRef<[u8]>, mode: OpenMode) -> Result<Fd, Error> {
     unsafe {
         asm!(
             "syscall",
-            in("rax") Syscall::Open as i64,
+            in("rax") Syscall::Open as u32,
             in("rdi") path.as_ref().as_ptr(),
             in("rsi") mode as i64,
             in("rdx") 0,

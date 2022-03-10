@@ -1,19 +1,22 @@
 #![no_std]
 #![no_main]
 
+use core::fmt::Write;
+
 mod os;
 mod error;
 
 use error::Error;
 
-pub fn main() -> Result<(), Error> {
-    let file = os::open_for_read("/proc/self/maps\0")?;
-    let mut buf = [0; 2000];
-    //os::read(file, &mut buf[..])?;
-    os::write(os::STDERR, buf)?;
+pub fn main(args: &[*const u8]) -> Result<(), Error> {
+    os::write(os::STDERR, "main start\n")?;
 
-    os::write(os::STDERR, "moikkaaaaa\n")?;
-    os::write(os::STDERR, "moikkaaaaa\n")?;
+    let file = os::open_for_read("/proc/self/maps\0")?;
+    //let mut buf = [0; 2000];
+    //os::read(file, &mut buf[..])?;
+    //os::write(os::STDERR, buf)?;
+
+    os::write(os::STDERR, "main end\n")?;
     Ok(())
 }
 
