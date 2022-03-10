@@ -1,5 +1,3 @@
-main: target/release/quack elf
-
 elf: test.musl.elf test.gnu.elf
 
 test.musl.elf: src/test_elf.c
@@ -10,6 +8,3 @@ test.gnu.elf: src/test_elf.c
 
 clean:
 	rm *.elf target/release/quack
-
-target/release/quack:
-	RUSTFLAGS="-C relocation-model=static" cargo build --release

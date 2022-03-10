@@ -3,27 +3,6 @@ use core::{arch::asm, ffi::c_void, fmt::{self, Write}};
 // Items required by no_std
 
 #[no_mangle]
-pub unsafe extern "C" fn memset(mut s: *mut u8, c: i32, n: usize) -> *mut u8 {
-    let end = s.add(n);
-    while s < end {
-        *s = c as u8;
-        s = s.add(1);
-    }
-    s
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn memcpy(mut dst: *mut u8, mut src: *const u8, count: usize) -> *mut u8 {
-    let end = src.add(count);
-    while src < end {
-        *dst = *src;
-        src = src.add(1);
-        dst = dst.add(1);
-    }
-    dst
-}
-
-#[no_mangle]
 fn __libc_csu_fini() {}
 
 #[no_mangle]
@@ -53,16 +32,6 @@ pub extern "C" fn main(_argc: isize, _argv: *const *const u8) -> isize {
     }
 }
 
-#[panic_handler]
-fn panic(pi: &core::panic::PanicInfo) -> ! {
-    if let Some(loc) = pi.location() {
-        let _ = writeln!(STDERR, "panic: {:?}", loc);
-    } else {
-        let _ = writeln!(STDERR, "panic");
-    }
-    exit(-1);
-}
-
 
 // Syscall implementations
 
@@ -89,18 +58,9 @@ pub fn exit(ret: isize) -> ! {
     loop {}
 }
 
-#[derive(Copy, Clone)]
-pub struct Fd(isize);
 pub const STDIN: Fd = Fd(0);
 pub const STDOUT: Fd = Fd(1);
 pub const STDERR: Fd = Fd(2);
-
-impl Write for Fd {
-    fn write_str(&mut self, s: &str) -> Result<(), fmt::Error> {
-        write(*self, s)?;
-        Ok(())
-    }
-}
 
 pub struct WriteError(isize);
 

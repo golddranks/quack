@@ -1,19 +1,19 @@
 #![no_std]
 #![no_main]
 
-#[cfg(all(target_os="linux", target_arch="x86_64"))]
-mod linux;
+mod os;
+mod error;
 
-pub struct Error;
+use error::Error;
 
 pub fn main() -> Result<(), Error> {
-    let file = linux::open("/proc/self/maps\0", linux::OpenMode::RdOnly)?;
+    let file = os::open_for_read("/proc/self/maps\0")?;
     let mut buf = [0; 2000];
-    linux::read(file, &mut buf[..])?;
-    linux::write(linux::STDOUT, buf)?;
+    //os::read(file, &mut buf[..])?;
+    os::write(os::STDERR, buf)?;
 
-    linux::write(linux::STDOUT, "moikkaaaaa\n")?;
-    linux::write(linux::STDOUT, "moikkaaaaa\n")?;
+    os::write(os::STDERR, "moikkaaaaa\n")?;
+    os::write(os::STDERR, "moikkaaaaa\n")?;
     Ok(())
 }
 
@@ -106,3 +106,5 @@ impl From<io::Error> for Error {
     }
 }
 */
+
+use core::fmt;
