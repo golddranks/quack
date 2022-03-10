@@ -1,16 +1,19 @@
-use core::{panic::PanicInfo, fmt::{Write, self}, ffi::c_void};
+use core::{
+    ffi::c_void,
+    fmt::{self, Write},
+    panic::PanicInfo,
+};
 
 use crate::Error;
 
-#[cfg(all(target_os="linux", target_arch="x86_64"))]
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 mod linux;
-
-#[cfg(all(target_os="linux", target_arch="x86_64"))]
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 use linux as inner;
 
-#[cfg(all(target_os="macos", target_arch="x86_64"))]
+#[cfg(all(target_os = "macos", target_arch = "x86_64"))]
 mod macos;
-#[cfg(all(target_os="macos", target_arch="x86_64"))]
+#[cfg(all(target_os = "macos", target_arch = "x86_64"))]
 use macos as inner;
 
 #[derive(Copy, Clone)]

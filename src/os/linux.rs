@@ -1,18 +1,20 @@
-use core::arch::asm;
-use core::fmt::Write;
-use core::ffi::c_void;
-use core::slice;
 use crate::{os::Fd, Error};
+use core::arch::asm;
+use core::ffi::c_void;
+use core::fmt::Write;
+use core::slice;
 
-core::arch::global_asm!("
+core::arch::global_asm!(
+    "
 .globl _start
 _start: mov    rdi, rsp # pass pointer to argc to start2; rdi is used for the first arg
         and    rsp, 0xfffffffffffffff0 # align stack to 16 bytes; expected by x86-64 Linux C ABI
         call   start2
-");
+"
+);
 
 #[no_mangle]
-extern "C" fn start2(stack_start: *const c_void) -> ! {
+unsafe extern "C" fn start2(stack_start: *const c_void) -> ! {
     let argc = unsafe { *(stack_start as *const usize) };
     let argv: *const *const u8 = unsafe { (stack_start as *const *const u8).offset(1) };
     let args: &[*const u8] = unsafe { slice::from_raw_parts(argv, argc) };
@@ -100,10 +102,10 @@ pub enum OpenMode {
     Append = 0x2000,
 }
 
-
 pub fn open(path: impl AsRef<[u8]>, mode: OpenMode) -> Result<Fd, Error> {
     let path = path.as_ref();
-    if let Some(b'\0') = path.last() {} else {
+    if let Some(b'\0') = path.last() {
+    } else {
         panic!("path must be null-terminated");
     };
     let ret: isize;

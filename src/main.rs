@@ -3,8 +3,8 @@
 
 use core::fmt::Write;
 
-mod os;
 mod error;
+mod os;
 
 use error::Error;
 
@@ -49,7 +49,7 @@ fn run() -> Result<(), Error> {
     let path = args_os()
         .nth(1)
         .ok_or(Error::new("provide a binary file"))?;
-    
+
     #[cfg(all(target_os="linux", target_arch="x86_64"))]
     runmem::maps();
 

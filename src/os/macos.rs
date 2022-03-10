@@ -1,6 +1,5 @@
-use core::arch::asm;
 use crate::{os::Fd, Error};
-
+use core::arch::asm;
 
 #[repr(u32)]
 enum Syscall {
@@ -24,7 +23,6 @@ pub fn exit(ret: u8) -> ! {
     }
     loop {}
 }
-
 
 pub fn write(fd: Fd, msg: impl AsRef<[u8]>) -> Result<usize, Error> {
     let msg = msg.as_ref();
@@ -69,7 +67,6 @@ pub fn read(fd: Fd, buf: &mut [u8]) -> Result<usize, Error> {
     }
 }
 
-
 #[repr(i64)]
 #[derive(Copy, Clone)]
 pub enum OpenMode {
@@ -80,10 +77,10 @@ pub enum OpenMode {
     Append = 0x2000,
 }
 
-
 pub fn open(path: impl AsRef<[u8]>, mode: OpenMode) -> Result<Fd, Error> {
     let path = path.as_ref();
-    if let Some(b'\0') = path.last() {} else {
+    if let Some(b'\0') = path.last() {
+    } else {
         panic!("path must be null-terminated");
     };
     let ret: i32;
