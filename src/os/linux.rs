@@ -1,56 +1,23 @@
-use core::{arch::asm, ffi::c_void, fmt::{self, Write}};
-
-// Items required by no_std
-
-#[no_mangle]
-fn __libc_csu_fini() {}
-
-#[no_mangle]
-fn __libc_csu_init() {}
-
-#[no_mangle]
-extern "C" fn __libc_start_main(
-    main: extern "C" fn(isize, *const *const u8) -> isize,
-    argc: isize,
-    argv: *const *const u8,
-    _csu_init: extern "C" fn(*mut c_void),
-    _csu_fini: extern "C" fn(*mut c_void),
-    _rtld_fini: extern "C" fn(*mut c_void),
-    _stack_end: *mut c_void,
-) {
-    let ret = main(argc, argv);
-    exit(ret);
-}
-
-#[no_mangle]
-pub extern "C" fn main(_argc: isize, _argv: *const *const u8) -> isize {
-    if let Err(_) = crate::main() {
-        let _ = writeln!(STDERR, "Error!");
-        -1
-    } else {
-        0
-    }
-}
+use core::arch::asm;
+use crate::{os::Fd, Error};
 
 
-// Syscall implementations
-
-#[repr(u64)]
+#[repr(i32)]
 enum Syscall {
-    Read = 0,
-    Write = 1,
-    Open = 2,
-    Close = 3,
-    Mmap = 9,
-    Exit = 60,
+    Read = 0x00000000,
+    Write = 0x00000001,
+    Open = 0x00000002,
+    Close = 0x00000003,
+    Mmap = 0x00000009,
+    Exit = 0x00000060,
 }
 
-pub fn exit(ret: isize) -> ! {
+pub fn exit(ret: u8) -> ! {
     unsafe {
         asm!(
             "syscall",
             in("rax") Syscall::Exit as i64,
-            in("rdi") ret,
+            in("rdi") ret as i64,
             out("rcx") _,
             out("r11") _,
         );
@@ -58,25 +25,8 @@ pub fn exit(ret: isize) -> ! {
     loop {}
 }
 
-pub const STDIN: Fd = Fd(0);
-pub const STDOUT: Fd = Fd(1);
-pub const STDERR: Fd = Fd(2);
 
-pub struct WriteError(isize);
-
-impl From<WriteError> for fmt::Error {
-    fn from(_: WriteError) -> Self {
-        Self
-    }
-}
-
-impl From<WriteError> for crate::Error {
-    fn from(_: WriteError) -> Self {
-        Self
-    }
-}
-
-pub fn write(fd: Fd, msg: impl AsRef<[u8]>) -> Result<usize, WriteError> {
+pub fn write(fd: Fd, msg: impl AsRef<[u8]>) -> Result<usize, Error> {
     let msg = msg.as_ref();
     let ret: isize;
     unsafe {
@@ -94,11 +44,11 @@ pub fn write(fd: Fd, msg: impl AsRef<[u8]>) -> Result<usize, WriteError> {
     if ret >= 0 {
         Ok(ret as usize)
     } else {
-        Err(WriteError(ret))
+        Err(Error::Write(ret as i32))
     }
 }
 
-pub fn read(fd: Fd, buf: &mut [u8]) -> Result<usize, WriteError> {
+pub fn read(fd: Fd, buf: &mut [u8]) -> Result<usize, Error> {
     let ret: isize;
     unsafe {
         asm!(
@@ -115,15 +65,7 @@ pub fn read(fd: Fd, buf: &mut [u8]) -> Result<usize, WriteError> {
     if ret >= 0 {
         Ok(ret as usize)
     } else {
-        Err(WriteError(ret)) // TODO: ReadError
-    }
-}
-
-pub struct OpenError(isize);
-
-impl From<OpenError> for crate::Error {
-    fn from(_: OpenError) -> Self {
-        Self
+        Err(Error::Read(ret as i32))
     }
 }
 
@@ -138,7 +80,7 @@ pub enum OpenMode {
 }
 
 
-pub fn open(path: impl AsRef<[u8]>, mode: OpenMode) -> Result<Fd, OpenError> {
+pub fn open(path: impl AsRef<[u8]>, mode: OpenMode) -> Result<Fd, Error> {
     let path = path.as_ref();
     if let Some(b'\0') = path.last() {} else {
         panic!("path must be null-terminated");
@@ -157,8 +99,8 @@ pub fn open(path: impl AsRef<[u8]>, mode: OpenMode) -> Result<Fd, OpenError> {
         );
     }
     if ret < 0 {
-        Err(OpenError(ret))
+        Err(Error::Write(ret as i32))
     } else {
-        Ok(Fd(ret))
+        Ok(Fd(ret as u32))
     }
 }

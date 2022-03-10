@@ -106,5 +106,3 @@ impl From<io::Error> for Error {
     }
 }
 */
-
-use core::fmt;
