@@ -4,7 +4,7 @@ use core::{
     slice,
 };
 
-use crate::{os::Fd, Error};
+use crate::{os::{Fd, Args}, Error};
 
 global_asm!(
     ".globl __start
@@ -19,7 +19,7 @@ unsafe extern "C" fn start2(stack_start: *const c_void) -> ! {
     let argc = unsafe { *(stack_start as *const usize) };
     let argv: *const *const u8 = unsafe { (stack_start as *const *const u8).offset(1) };
     let args: &[*const u8] = unsafe { slice::from_raw_parts(argv, argc) };
-    if let Err(_) = crate::main(args) {
+    if let Err(_) = crate::main(Args(args)) {
         let _ = write(crate::os::STDERR, "Error!\n");
         exit(1)
     } else {

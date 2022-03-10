@@ -1,6 +1,6 @@
 use core::{
     fmt::{self, Write},
-    panic::PanicInfo,
+    panic::PanicInfo, slice,
 };
 
 use crate::Error;
@@ -58,15 +58,44 @@ pub unsafe extern "C" fn memcpy(mut dst: *mut u8, mut src: *const u8, count: usi
     dst
 }
 
-pub fn map_file() {
+pub struct MappedFile(&'static mut [u8]);
+
+impl MappedFile {
+    pub fn as_slice(&self) -> &[u8] {
+        self.0
+    }
+}
+
+pub struct Args(&'static [*const u8]);
+
+impl Args {
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn nth(&self, n: usize) -> &[u8] {
+        let base = self.0[n];
+        let mut ptr = base;
+        loop {
+            let c = unsafe { *ptr };
+            if c == b'\0' {
+                break;
+            }
+            ptr = unsafe { ptr.offset(1) };
+        }
+        unsafe { slice::from_raw_parts(base,  ptr.offset_from(base) as usize) }
+    }
+}
+
+pub fn map_file(_fd: Fd) -> Result<MappedFile, Error> {
     unimplemented!()
 }
 
-pub fn open_for_log() {
+pub fn open_for_log(_path: impl AsRef<[u8]>) -> Result<Fd, Error> {
     unimplemented!()
 }
 
-pub fn open_for_read(path: impl AsRef<[u8]>) -> Result<Fd, Error> {
+pub fn open_for_read(_path: impl AsRef<[u8]>) -> Result<Fd, Error> {
     unimplemented!()
 }
 
