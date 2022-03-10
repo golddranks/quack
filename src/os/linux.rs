@@ -1,16 +1,17 @@
-use crate::{os::Fd, Error};
-use core::arch::asm;
-use core::ffi::c_void;
-use core::fmt::Write;
-use core::slice;
+use core::{
+    arch::{asm, global_asm},
+    ffi::c_void,
+    fmt::Write,
+    slice,
+};
 
-core::arch::global_asm!(
-    "
-.globl _start
+use crate::{os::Fd, Error};
+
+global_asm!(
+    ".globl _start
 _start: mov    rdi, rsp # pass pointer to argc to start2; rdi is used for the first arg
         and    rsp, 0xfffffffffffffff0 # align stack to 16 bytes; expected by x86-64 Linux C ABI
-        call   start2
-"
+        call   start2"
 );
 
 #[no_mangle]

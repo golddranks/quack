@@ -1,5 +1,31 @@
+use core::{
+    arch::{asm, global_asm},
+    ffi::c_void,
+    slice,
+};
+
 use crate::{os::Fd, Error};
-use core::arch::asm;
+
+global_asm!(
+    ".globl __start
+__start: mov    rdi, rsp # pass pointer to argc to start2; rdi is used for the first arg
+        and    rsp, 0xfffffffffffffff0 # align stack to 16 bytes; expected by x86-64 Linux C ABI
+        call   _start2"
+);
+
+#[no_mangle]
+#[allow(unused_unsafe)]
+unsafe extern "C" fn start2(stack_start: *const c_void) -> ! {
+    let argc = unsafe { *(stack_start as *const usize) };
+    let argv: *const *const u8 = unsafe { (stack_start as *const *const u8).offset(1) };
+    let args: &[*const u8] = unsafe { slice::from_raw_parts(argv, argc) };
+    if let Err(_) = crate::main(args) {
+        let _ = write(crate::os::STDERR, "Error!\n");
+        exit(1)
+    } else {
+        exit(0)
+    }
+}
 
 #[repr(u32)]
 enum Syscall {

@@ -1,5 +1,4 @@
 use core::{
-    ffi::c_void,
     fmt::{self, Write},
     panic::PanicInfo,
 };
