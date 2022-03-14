@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use core::fmt::Debug;
 
 #[repr(C)]
 #[derive(Default, Debug, Clone, PartialEq)]
@@ -124,19 +124,19 @@ pub struct ElfNonArchDep2 {
 }
 
 #[repr(C)]
-#[derive(Default, Debug, Clone, PartialEq)]
-pub struct ElfHead32 {
-    pub(super) head: ElfNonArchDep,
-    pub(super) offs: Elf32Offs,
-    pub(super) tail: ElfNonArchDep2,
+#[derive(Debug, Clone, PartialEq)]
+pub struct ElfHead32<'a> {
+    pub(super) head: &'a ElfNonArchDep,
+    pub(super) offs: &'a Elf32Offs,
+    pub(super) tail: &'a ElfNonArchDep2,
 }
 
 #[repr(C)]
-#[derive(Default, Debug, Clone, PartialEq)]
-pub struct ElfHead64 {
-    pub(super) head: ElfNonArchDep,
-    pub(super) offs: Elf64Offs,
-    pub(super) tail: ElfNonArchDep2,
+#[derive(Debug, Clone, PartialEq)]
+pub struct ElfHead64<'a> {
+    pub(super) head: &'a ElfNonArchDep,
+    pub(super) offs: &'a Elf64Offs,
+    pub(super) tail: &'a ElfNonArchDep2,
 }
 
 #[repr(C)]
@@ -177,6 +177,9 @@ pub enum PType {
     Shlib = 0x00000005,
     Phdr = 0x00000006,
     Tls = 0x00000007,
+    GnuEhFrame = 0x6474e550,
+    GnuStack = 0x6474e551,
+    GnuRelro = 0x6474e552,
 }
 
 #[derive(Copy, Clone)]
@@ -214,6 +217,9 @@ pub enum ShType {
     Group = 0x11,
     SymtabShndx = 0x12,
     Num = 0x13,
+    GnuHash = 0x6FFFFFF6,
+    GnuVerneed = 0x6FFFFFFE,
+    GnuVersym = 0x6FFFFFFF,
 }
 
 #[derive(Copy, Clone)]
@@ -385,7 +391,6 @@ fn miri_as_bytes_mut() {
 
 #[test]
 fn miri_vec_as_bytes_mut() {
-    use crate::utils::vec_as_bytes_mut;
     use rand::Fill;
     fn test<T: TransmuteSafe>() -> Vec<T> {
         let mut vec = Vec::new();

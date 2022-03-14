@@ -1,32 +1,17 @@
 use core::{
     arch::{asm, global_asm},
-    ffi::c_void,
-    fmt::Write,
-    slice,
 };
 
 use crate::{os::Fd, Error};
 
-global_asm!(
-    ".globl _start
-_start: mov    rdi, rsp # pass pointer to argc to start2; rdi is used for the first arg
-        and    rsp, 0xfffffffffffffff0 # align stack to 16 bytes; expected by x86-64 Linux C ABI
-        call   start2"
+global_asm!("
+.globl _start
+_start:     # entry point of the binary, called by the loader
+    pop     rdi  # stack points to argc; pop that & pass it to start2 as the 1st arg (rdi)
+    mov     rsi, rsp  # stack (rsi) points to argv; pass it to start2 as the 2nd arg (rsi)
+    and     rsp, 0xfffffffffffffff0 # align stack to 16 bytes; expected by the ABI
+    call    start2"
 );
-
-#[no_mangle]
-#[allow(unused_unsafe)]
-unsafe extern "C" fn start2(stack_start: *const c_void) -> ! {
-    let argc = unsafe { *(stack_start as *const usize) };
-    let argv: *const *const u8 = unsafe { (stack_start as *const *const u8).offset(1) };
-    let args: &[*const u8] = unsafe { slice::from_raw_parts(argv, argc) };
-    if let Err(_) = crate::main(Args(args)) {
-        let _ = write(crate::os::STDERR, "Error!\n");
-        exit(1)
-    } else {
-        exit(0)
-    }
-}
 
 #[repr(u32)]
 enum Syscall {
@@ -94,30 +79,28 @@ pub fn read(fd: Fd, buf: &mut [u8]) -> Result<usize, Error> {
     }
 }
 
-#[repr(i64)]
-#[derive(Copy, Clone)]
-pub enum OpenMode {
-    RdOnly = 0x000,
-    WrOnly = 0x001,
-    RdWr = 0x002,
-    Creat = 0x100,
-    Append = 0x2000,
-}
+pub mod OpenMode {
+    pub const RD_ONLY: i32 = 0x000;
+    pub const WR_ONLY: i32 = 0x001;
+    pub const RD_WR: i32 = 0x002;
+    pub const CREAT: i32 = 0x100;
+    pub const APPEND: i32 = 0x2000;
+} 
 
-pub fn open(path: impl AsRef<[u8]>, mode: OpenMode) -> Result<Fd, Error> {
-    let path = path.as_ref();
+
+pub fn open(path: &[u8], mode: i32, file_perms: i32) -> Result<Fd, Error> {
     if let Some(b'\0') = path.last() {
     } else {
         panic!("path must be null-terminated");
     };
-    let ret: isize;
+    let ret: i64;
     unsafe {
         asm!(
             "syscall",
             in("rax") Syscall::Open as u32,
-            in("rdi") path.as_ref().as_ptr(),
-            in("rsi") mode as i64,
-            in("rdx") 0,
+            in("rdi") path.as_ptr(),
+            in("rsi") mode,
+            in("rdx") file_perms,
             out("rcx") _,
             out("r11") _,
             lateout("rax") ret,

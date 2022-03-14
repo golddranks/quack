@@ -1,15 +1,11 @@
-use core::{mem::size_of};
-use std::{
-    fmt::Debug,
-    io::{Read, Seek, SeekFrom},
-};
+use core::{mem::size_of, fmt::Debug};
 
 mod enum_impls;
 mod ffi_types;
 #[cfg(test)]
 mod test;
 
-use crate::{e, Error, utils::{ToKnown, TransmuteSafe, vec_as_bytes_mut}};
+use crate::{e, Error, utils::{ToKnown, TransmuteSafe}};
 
 use ffi_types::{
     EIData, EIClass, PType, Elf32Offs, Elf64Offs, ElfHead32, ElfHead64, ElfNonArchDep, ElfNonArchDep2, ProgHead32,
@@ -17,45 +13,28 @@ use ffi_types::{
 };
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Strings {
-    buf: Vec<u8>,
+pub struct Strings<'a> {
+    buf: &'a [u8],
 }
 
 trait ElfHead {
-    type Offs: TransmuteSafe;
-    type SectHead: TransmuteSafe;
-    type ProgHead: TransmuteSafe;
-    fn phoff(&self) -> u64;
-    fn shoff(&self) -> u64;
+    type Offs: TransmuteSafe + Debug;
+    type SectHead: TransmuteSafe + Debug;
+    type ProgHead: TransmuteSafe + Debug;
+    fn phoff(&self) -> usize;
+    fn shoff(&self) -> usize;
     fn phnum(&self) -> usize;
     fn shnum(&self) -> usize;
-    fn offs(reader: &mut impl Read) -> Result<Self::Offs, Error> {
-        let mut offs = Self::Offs::default();
-        reader.read_exact(offs.as_bytes_mut())?;
-        Ok(offs)
+    fn prog_headers<'a>(&self, buf: &'a [u8]) -> Result<&'a [Self::ProgHead], Error> {
+        let buf = &buf[self.phoff()..];
+        let (us, _) = Self::ProgHead::slice_from_buf(buf, self.phnum())?;
+        Ok(us)
     }
 
-    fn tail(reader: &mut impl Read) -> Result<ElfNonArchDep2, Error>
-    where
-        Self: Sized,
-    {
-        let mut tail = ElfNonArchDep2::default();
-        reader.read_exact(tail.as_bytes_mut())?;
-        tail.check::<Self>()?;
-        Ok(tail)
-    }
-    fn prog_headers(&self, reader: &mut (impl Read + Seek)) -> Result<Vec<Self::ProgHead>, Error> {
-        let mut v = Vec::new();
-        reader.seek(SeekFrom::Start(self.phoff()))?;
-        reader.read_exact(vec_as_bytes_mut(&mut v, self.phnum()))?;
-        Ok(v)
-    }
-
-    fn sect_headers(&self, reader: &mut (impl Read + Seek)) -> Result<Vec<Self::SectHead>, Error> {
-        let mut v = Vec::new();
-        reader.seek(SeekFrom::Start(self.shoff()))?;
-        reader.read_exact(vec_as_bytes_mut(&mut v, self.shnum()))?;
-        Ok(v)
+    fn sect_headers<'a>(&self, buf: &'a [u8]) -> Result<&'a [Self::SectHead], Error> {
+        let buf = &buf[self.shoff()..];
+        let (us, _) = Self::SectHead::slice_from_buf(buf, self.shnum())?;
+        Ok(us)
     }
 }
 
@@ -161,15 +140,15 @@ pub trait Sym: Debug {
     fn st_type(&self) -> Result<StType, Error>;
 }
 
-impl ElfHead for ElfHead32 {
+impl ElfHead for ElfHead32<'_> {
     type Offs = Elf32Offs;
     type SectHead = SectHead32;
     type ProgHead = ProgHead32;
-    fn phoff(&self) -> u64 {
-        self.offs.e_phoff as u64
+    fn phoff(&self) -> usize {
+        self.offs.e_phoff as usize
     }
-    fn shoff(&self) -> u64 {
-        self.offs.e_shoff as u64
+    fn shoff(&self) -> usize {
+        self.offs.e_shoff as usize
     }
     fn phnum(&self) -> usize {
         self.tail.e_phnum as usize
@@ -179,15 +158,15 @@ impl ElfHead for ElfHead32 {
     }
 }
 
-impl ElfHead for ElfHead64 {
+impl ElfHead for ElfHead64<'_> {
     type Offs = Elf64Offs;
     type SectHead = SectHead64;
     type ProgHead = ProgHead64;
-    fn phoff(&self) -> u64 {
-        self.offs.e_phoff as u64
+    fn phoff(&self) -> usize {
+        self.offs.e_phoff as usize
     }
-    fn shoff(&self) -> u64 {
-        self.offs.e_shoff as u64
+    fn shoff(&self) -> usize {
+        self.offs.e_shoff as usize
     }
     fn phnum(&self) -> usize {
         self.tail.e_phnum as usize
@@ -325,7 +304,8 @@ impl ElfNonArchDep {
 
 impl ElfNonArchDep2 {
     fn check<T: ElfHead>(&self) -> Result<(), Error> {
-        if self.e_ehsize as usize != size_of::<T>() {
+        let header_size = size_of::<ElfNonArchDep>() + size_of::<T::Offs>() + size_of::<ElfNonArchDep2>();
+        if self.e_ehsize as usize != header_size {
             return e("elf_header.e_ehsize invalid");
         }
         if self.e_phnum > 0 && self.e_phentsize as usize != size_of::<T::ProgHead>() {
@@ -339,25 +319,26 @@ impl ElfNonArchDep2 {
 }
 
 #[derive(Debug)]
-enum ElfHeadType {
-    EH32(ElfHead32),
-    EH64(ElfHead64),
+enum ElfHeadType<'a> {
+    EH32(ElfHead32<'a>),
+    EH64(ElfHead64<'a>),
 }
 
-impl ElfHeadType {
-    fn from(reader: &mut impl Read) -> Result<ElfHeadType, Error> {
-        let mut head = ElfNonArchDep::default();
-        reader.read_exact(head.as_bytes_mut())?;
+impl ElfHeadType<'_> {
+    fn from(buf: &[u8]) -> Result<ElfHeadType<'_>, Error> {
+        let (head, buf) = ElfNonArchDep::from_buf(buf)?;
         head.check()?;
         let eh = match head.e_ident.ei_class.known() {
             Ok(EIClass::Elf32Bit) => {
-                let offs = ElfHead32::offs(reader)?;
-                let tail = ElfHead32::tail(reader)?;
+                let (offs, buf) = Elf32Offs::from_buf(buf)?;
+                let (tail, _) = ElfNonArchDep2::from_buf(buf)?;
+                tail.check::<ElfHead32>()?;
                 ElfHeadType::EH32(ElfHead32 { head, offs, tail })
             }
             Ok(EIClass::Elf64Bit) => {
-                let offs = ElfHead64::offs(reader)?;
-                let tail = ElfHead64::tail(reader)?;
+                let (offs, buf) = Elf64Offs::from_buf(buf)?;
+                let (tail, _) = ElfNonArchDep2::from_buf(buf)?;
+                tail.check::<ElfHead64>()?;
                 ElfHeadType::EH64(ElfHead64 { head, offs, tail })
             }
             Err(_) => unreachable!(),
@@ -366,16 +347,15 @@ impl ElfHeadType {
     }
 }
 
-impl Strings {
-    fn from<T: SectHead>(reader: &mut (impl Read + Seek), str_head: &T) -> Result<Strings, Error> {
+impl Strings<'_> {
+    fn from<'a, T: SectHead>(buf: &'a [u8], str_head: &T) -> Result<Strings<'a>, Error> {
         if str_head.sh_type()? != ShType::Strtab {
             return e("invalid sh_type for a string section");
         }
-        reader.seek(SeekFrom::Start(str_head.offset() as u64))?;
-        let mut buf = Vec::new();
-        buf.resize(str_head.size(), 0);
-        reader.read_exact(&mut buf)?;
-
+        if buf.len() < str_head.offset() + str_head.size() {
+            return e("buffer is too small to contain the strtab!")
+        }
+        let buf = &buf[str_head.offset()..str_head.offset()+str_head.size()];
         if str_head.size() > 0 && (buf[0] != b'\0' || buf[buf.len() - 1] != b'\0') {
             return e("malformed string section");
         }
@@ -399,13 +379,13 @@ impl Strings {
     }
 }
 
-fn sh_names<T: SectHead>(
-    reader: &mut (impl Read + Seek),
+fn sh_names<'a, T: SectHead>(
+    buf: &'a [u8],
     eh_tail: &ElfNonArchDep2,
     shs: &[T],
-) -> Result<Strings, Error> {
+) -> Result<Strings<'a>, Error> {
     let sh_strs = &shs[eh_tail.e_shstrndx as usize];
-    Ok(Strings::from(reader, sh_strs)?)
+    Ok(Strings::from(buf, sh_strs)?)
 }
 
 fn find_sh_by<'a, T: SectHead>(
@@ -422,72 +402,71 @@ fn find_sh_by<'a, T: SectHead>(
     Ok(None)
 }
 
-fn symtab<T: SectHead>(
-    reader: &mut (impl Read + Seek),
+fn symtab<'a, T: SectHead>(
+    buf: &'a [u8],
     shs: &[T],
     sh_names: &Strings,
-) -> Result<Option<Vec<T::SymTab>>, Error> {
+) -> Result<Option<&'a [T::SymTab]>, Error> {
     if let Some(symtab) = find_sh_by(shs, sh_names, ShType::Symtab, b".symtab")? {
         if symtab.entsize() != size_of::<T::SymTab>() {
             return e("invalid symtab entity size");
         }
-        reader.seek(SeekFrom::Start(symtab.offset() as u64))?;
-        let mut syms: Vec<T::SymTab> = Vec::new();
+        let buf = &buf[symtab.offset()..];
         let n = symtab.size() / symtab.entsize();
-        reader.read_exact(vec_as_bytes_mut(&mut syms, n))?;
+        let (us, _) = T::SymTab::slice_from_buf(buf, n)?;
 
-        return Ok(Some(syms));
+        return Ok(Some(us));
     }
     Ok(None)
 }
 
-fn sym_names<T: SectHead>(
-    reader: &mut (impl Read + Seek),
+fn sym_names<'a, T: SectHead>(
+    buf: &'a [u8],
     shs: &[T],
     sh_names: &Strings,
-) -> Result<Option<Strings>, Error> {
+) -> Result<Option<Strings<'a>>, Error> {
     if let Some(strtab) = find_sh_by(shs, sh_names, ShType::Strtab, b".strtab")? {
-        Ok(Some(Strings::from(reader, strtab)?))
+        Ok(Some(Strings::from(buf, strtab)?))
     } else {
         Ok(None)
     }
 }
 
 #[derive(Debug)]
-pub struct ElfFile32 {
-    pub eh: ElfHead32,
-    pub phs: Vec<ProgHead32>,
-    pub shs: Option<Vec<SectHead32>>,
-    pub sh_names: Option<Strings>,
-    pub symtab: Option<Vec<Sym32>>,
-    pub sym_names: Option<Strings>,
+pub struct ElfFile32<'a> {
+    pub eh: ElfHead32<'a>,
+    pub phs: &'a [ProgHead32],
+    pub shs: Option<&'a [SectHead32]>,
+    pub sh_names: Option<Strings<'a>>,
+    pub symtab: Option<&'a [Sym32]>,
+    pub sym_names: Option<Strings<'a>>,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct ElfFile64 {
-    pub eh: ElfHead64,
-    pub phs: Vec<ProgHead64>,
-    pub shs: Option<Vec<SectHead64>>,
-    pub sh_names: Option<Strings>,
-    pub symtab: Option<Vec<Sym64>>,
-    pub sym_names: Option<Strings>,
+pub struct ElfFile64<'a> {
+    pub eh: ElfHead64<'a>,
+    pub phs: &'a [ProgHead64],
+    pub shs: Option<&'a [SectHead64]>,
+    pub sh_names: Option<Strings<'a>>,
+    pub symtab: Option<&'a [Sym64]>,
+    pub sym_names: Option<Strings<'a>>,
 }
 
 #[derive(Debug)]
-pub enum ElfParse {
-    Elf32(ElfFile32),
-    Elf64(ElfFile64),
+pub enum ElfParse<'a> {
+    Elf32(ElfFile32<'a>),
+    Elf64(ElfFile64<'a>),
 }
 
-pub fn with(reader: &mut (impl Read + Seek)) -> Result<ElfParse, Error> {
-    let elf_header = ElfHeadType::from(reader)?;
+pub fn with(buf: &[u8]) -> Result<ElfParse, Error> {
+    let elf_header = ElfHeadType::from(buf)?;
     match elf_header {
         ElfHeadType::EH32(eh) => {
-            let phs = eh.prog_headers(reader)?;
-            let shs = eh.sect_headers(reader)?;
-            let sh_names = sh_names(reader, &eh.tail, &shs)?;
-            let symtab = symtab(reader, &shs, &sh_names)?;
-            let sym_names = sym_names(reader, &shs, &sh_names)?;
+            let phs = eh.prog_headers(buf)?;
+            let shs = eh.sect_headers(buf)?;
+            let sh_names = sh_names(buf, &eh.tail, &shs)?;
+            let symtab = symtab(buf, &shs, &sh_names)?;
+            let sym_names = sym_names(buf, &shs, &sh_names)?;
             Ok(ElfParse::Elf32(ElfFile32 {
                 eh,
                 phs,
@@ -498,11 +477,11 @@ pub fn with(reader: &mut (impl Read + Seek)) -> Result<ElfParse, Error> {
             }))
         }
         ElfHeadType::EH64(eh) => {
-            let phs = eh.prog_headers(reader)?;
-            let shs = eh.sect_headers(reader)?;
-            let sh_names = sh_names(reader, &eh.tail, &shs)?;
-            let symtab = symtab(reader, &shs, &sh_names)?;
-            let sym_names = sym_names(reader, &shs, &sh_names)?;
+            let phs = eh.prog_headers(buf)?;
+            let shs = eh.sect_headers(buf)?;
+            let sh_names = sh_names(buf, &eh.tail, &shs)?;
+            let symtab = symtab(buf, &shs, &sh_names)?;
+            let sym_names = sym_names(buf, &shs, &sh_names)?;
             Ok(ElfParse::Elf64(ElfFile64 {
                 eh,
                 phs,

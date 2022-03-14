@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use core::{fmt::{self, Debug, Formatter}};
 
 use crate::{
     elf::parse::ffi_types::{EIClass, EIClassUnchecked, EIData, EIDataUnchecked, EIOsAbi, EIOsAbiUnchecked, EType, ETypeUnchecked, EMachine, EMachineUnchecked, PType, PTypeUnchecked, ShType, ShTypeUnchecked},
@@ -101,7 +101,7 @@ impl ToKnown for PTypeUnchecked {
 
     fn known(&self) -> Result<Self::Known, Self::Unknown> {
         let u = self.unknown();
-        if (0x00..0x07).contains(&u) {
+        if (0x00..=0x07).contains(&u) || [0x6474e550, 0x6474e551, 0x6474e552].contains(&u) {
             Ok(unsafe { self.known })
         } else {
             Err(u)
@@ -119,7 +119,7 @@ impl ToKnown for ShTypeUnchecked {
 
     fn known(&self) -> Result<Self::Known, Self::Unknown> {
         let u = self.unknown();
-        if (0x00..0x0B).contains(&u) || (0x0E..=0x13).contains(&u) {
+        if (0x00..=0x0B).contains(&u) || (0x0E..=0x13).contains(&u) || [0x6FFFFFFF, 0x6FFFFFFE, 0x6FFFFFF6].contains(&u) {
             Ok(unsafe { self.known })
         } else {
             Err(u)
@@ -174,7 +174,7 @@ impl Default for ShTypeUnchecked {
 }
 
 impl Debug for EIClassUnchecked {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Ok(t) = self.known() {
             t.fmt(f)
         } else {
@@ -184,7 +184,7 @@ impl Debug for EIClassUnchecked {
 }
 
 impl Debug for EIDataUnchecked {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Ok(t) = self.known() {
             t.fmt(f)
         } else {
@@ -194,7 +194,7 @@ impl Debug for EIDataUnchecked {
 }
 
 impl Debug for EIOsAbiUnchecked {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Ok(t) = self.known() {
             t.fmt(f)
         } else {
@@ -204,7 +204,7 @@ impl Debug for EIOsAbiUnchecked {
 }
 
 impl Debug for ETypeUnchecked {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Ok(t) = self.known() {
             t.fmt(f)
         } else {
@@ -214,7 +214,7 @@ impl Debug for ETypeUnchecked {
 }
 
 impl Debug for EMachineUnchecked {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Ok(t) = self.known() {
             t.fmt(f)
         } else {
@@ -224,7 +224,7 @@ impl Debug for EMachineUnchecked {
 }
 
 impl Debug for PTypeUnchecked {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Ok(t) = self.known() {
             t.fmt(f)
         } else {
@@ -234,7 +234,7 @@ impl Debug for PTypeUnchecked {
 }
 
 impl Debug for ShTypeUnchecked {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Ok(t) = self.known() {
             t.fmt(f)
         } else {

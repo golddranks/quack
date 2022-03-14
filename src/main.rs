@@ -1,10 +1,15 @@
-#![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_main)]
+
+use core::{fmt::Write};
 
 mod error;
 mod os;
 
+use elf::e;
 use error::Error;
+
+/*
 
 pub fn main(args: os::Args) -> Result<(), Error> {
     os::write(os::STDERR, "main start\n")?;
@@ -14,9 +19,12 @@ pub fn main(args: os::Args) -> Result<(), Error> {
         os::write(os::STDERR, "\n")?;
     }
 
-    let log = os::open_for_log("trace.log\0")?;
+    let log = os::open_for_log("test/trace.log\0")?;
+    writeln!(os::STDERR, "{:?}", log)?;
     os::write(log, "test")?;
-    let elf = os::open_for_read("/proc/self/maps\0")?;
+
+    let elf = os::open_for_read("test/hello.txt\0")?;
+    writeln!(os::STDERR, "{:?}", elf)?;
     let slice = os::map_file(elf)?;
     os::write(os::STDERR, slice.as_slice())?;
 
@@ -24,13 +32,10 @@ pub fn main(args: os::Args) -> Result<(), Error> {
     Ok(())
 }
 
-/*
-use std::{env::args_os, io, fs::File};
+*/
 
-mod mmap;
 mod elf;
 mod utils;
-mod runmem;
 
 use crate::elf::parse::{ElfFile64, ElfParse, Sym, StType};
 
@@ -40,25 +45,20 @@ use crate::elf::parse::{ElfFile64, ElfParse, Sym, StType};
 // Rust demangling
 // Mach-O support
 
-fn main() {
-    match run() {
-        Ok(_) => (),
-        Err(e) => {
-            eprintln!("{}", e.s)
-        }
+fn main(args: os::Args) -> Result<(), Error> {
+    if args.len() < 2 {
+        writeln!(os::STDERR, "Provide a path to binary file as the first argument!")?;
+        return Err(Error::Cli)
     }
-}
+    let path = args.nth(1);
 
-fn run() -> Result<(), Error> {
-    let path = args_os()
-        .nth(1)
-        .ok_or(Error::new("provide a binary file"))?;
+    //#[cfg(all(target_os="linux", target_arch="x86_64"))]
+    //runmem::maps();
 
-    #[cfg(all(target_os="linux", target_arch="x86_64"))]
-    runmem::maps();
-
-    let mut reader = File::open(path)?;
-    let elf = elf::parse::with(&mut reader)?;
+    let elf_fd = os::open_for_read(path)?;
+    let elf_file = os::map_file(elf_fd)?;
+    writeln!(os::STDERR, "elf_file: {:?} size: {}", elf_file.as_slice().as_ptr(), elf_file.as_slice().len())?;
+    let elf = elf::parse::with(elf_file.as_slice())?;
     match elf {
         ElfParse::Elf32(_) => unimplemented!(),
         ElfParse::Elf64(ElfFile64 {
@@ -69,21 +69,21 @@ fn run() -> Result<(), Error> {
             symtab: Some(symtab),
             sym_names: Some(sym_names),
         }) => {
-            println!("eh: {:?}", eh);
-            for ph in &phs {
-                println!("ph: {:?}", ph);
+            writeln!(os::STDERR, "eh: {:?}", eh)?;
+            for ph in phs {
+                writeln!(os::STDERR, "ph: {:?}", ph)?;
             }
-            #[cfg(target_arch="x86_64")]
+            #[cfg(all(target_os="linux", target_arch="x86_64"))]
             elf::load::probe();
             #[cfg(all(target_os="linux", target_arch="x86_64"))]
             elf::load::load(&phs, &mut reader);
             for sym in symtab {
                 if let Ok(StType::Func) = sym.st_type() {
-                    println!(
+                    writeln!(os::STDERR,
                         "{} {:?}",
-                        String::from_utf8_lossy(sym.name(&sym_names)?),
+                        core::str::from_utf8(sym.name(&sym_names)?)?,
                         sym.binding()?
-                    );
+                    )?;
                 }
             }
         }
@@ -91,25 +91,3 @@ fn run() -> Result<(), Error> {
     }
     Ok(())
 }
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Error {
-    s: &'static str,
-}
-
-impl Error {
-    fn new(s: &'static str) -> Error {
-        Error { s }
-    }
-}
-
-fn e<T>(s: &'static str) -> Result<T, Error> {
-    Err(Error::new(s))
-}
-
-impl From<io::Error> for Error {
-    fn from(_: io::Error) -> Self {
-        Error { s: "io::Error" }
-    }
-}
-*/
