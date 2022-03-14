@@ -73,10 +73,10 @@ fn main(args: os::Args) -> Result<(), Error> {
             for ph in phs {
                 writeln!(os::STDERR, "ph: {:?}", ph)?;
             }
-            #[cfg(all(target_os="linux", target_arch="x86_64"))]
-            elf::load::probe();
-            #[cfg(all(target_os="linux", target_arch="x86_64"))]
-            elf::load::load(&phs, &mut reader);
+        //    #[cfg(all(target_os="linux", target_arch="x86_64"))]
+        //    elf::load::probe();
+        //    #[cfg(all(target_os="linux", target_arch="x86_64"))]
+        //    elf::load::load(&phs, &mut reader);
             for sym in symtab {
                 if let Ok(StType::Func) = sym.st_type() {
                     writeln!(os::STDERR,
