@@ -119,7 +119,7 @@ impl ToKnown for ShTypeUnchecked {
 
     fn known(&self) -> Result<Self::Known, Self::Unknown> {
         let u = self.unknown();
-        if (0x00..=0x0B).contains(&u) || (0x0E..=0x13).contains(&u) || [0x6FFFFFFF, 0x6FFFFFFE, 0x6FFFFFF6].contains(&u) {
+        if (0x00..=0x0B).contains(&u) || (0x0E..=0x13).contains(&u) || [0x6FFFFFFF, 0x6FFFFFFE, 0x6FFFFFFD, 0x6FFFFFF6].contains(&u) {
             Ok(unsafe { self.known })
         } else {
             Err(u)

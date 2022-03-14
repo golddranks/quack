@@ -218,6 +218,7 @@ pub enum ShType {
     SymtabShndx = 0x12,
     Num = 0x13,
     GnuHash = 0x6FFFFFF6,
+    GnuVerdef = 0x6FFFFFFD,
     GnuVerneed = 0x6FFFFFFE,
     GnuVersym = 0x6FFFFFFF,
 }

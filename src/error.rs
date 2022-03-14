@@ -7,6 +7,7 @@ pub enum Error {
     Read(i32),
     Fstat(i32),
     Fmt(fmt::Error),
+    Mmap(i32),
     Elf,
     Cli,
     Utf8Error,
@@ -43,6 +44,7 @@ impl Error {
             Error::Cli => 6*16,
             Error::Utf8Error => 7*16,
             Error::Transmute => 8*16,
+            Error::Mmap(errno) => 9*16 + (errno % 16) as u8,
         }
     }
 }

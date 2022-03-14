@@ -20,8 +20,7 @@ use macos as inner;
 unsafe extern "C" fn start2(argc: i64, argv: *const *const u8) -> ! {
     let args: &[*const u8] = unsafe { slice::from_raw_parts(argv, argc as usize) };
     if let Err(e) = crate::main(Args(args)) {
-        let _ = writeln!(crate::os::STDERR, "{:?}", e);
-        let _ = write(crate::os::STDERR, "Stopped because of an error.\n");
+        let _ = writeln!(crate::os::STDERR, "Stopped because of {:?} error.", e);
         inner::exit(e.to_ret())
     } else {
         inner::exit(0)
@@ -128,8 +127,8 @@ pub fn map_file(fd: Fd) -> Result<MappedFile, Error> {
     inner::mmap(
         null(),
         stat.size,
-        inner::MmapProt::PROT_READ | inner::MmapProt::PROT_WRITE,
-        inner::MmapFlags::MAP_PRIVATE,
+        inner::mmap_prot::PROT_READ | inner::mmap_prot::PROT_WRITE,
+        inner::mmap_flags::MAP_PRIVATE,
         fd,
         0)
 }
