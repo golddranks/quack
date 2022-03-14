@@ -57,7 +57,6 @@ fn main(args: os::Args) -> Result<(), Error> {
 
     let elf_fd = os::open_for_read(path)?;
     let elf_file = os::map_file(elf_fd)?;
-    writeln!(os::STDERR, "elf_file: {:?} size: {}", elf_file.as_slice().as_ptr(), elf_file.as_slice().len())?;
     let elf = elf::parse::with(elf_file.as_slice())?;
     match elf {
         ElfParse::Elf32(_) => unimplemented!(),

@@ -206,8 +206,6 @@ pub fn mmap(addr: *const c_void, len: i64, prot: u32, flags: u32, fd: Fd, offset
     unsafe {
         asm!(
             "syscall",
-            "mov rcx, rax", // move the return value away from rax
-            "lahf", // check the carry flag, which MacOS uses to report error status
             in("rax") Syscall::Mmap as u32,
             in("rdi") addr,
             in("rsi") len,

@@ -1,8 +1,7 @@
 
-use core::arch::asm;
+use core::{arch::asm, fmt::Write};
 
-use crate::os::{self, STDERR};
-use crate::elf::parse::ProgHead;
+use crate::{os::{self, STDERR, Args}, elf::parse::ProgHead, error};
 
 #[cfg(all(target_os="linux", target_arch="x86_64"))]
 pub fn probe() {
@@ -11,11 +10,11 @@ pub fn probe() {
     unsafe { asm!("lea {}, [rip]", out(reg) x); }
     writeln!(STDERR, "{:x?}", x);
     writeln!(STDERR, "{:x?}", probe as fn() as u64);
-    writeln!(STDERR, "main: {:x?}", crate::main as fn() as u64);
+    writeln!(STDERR, "main: {:x?}", crate::main as fn(Args) -> Result<(), error::Error> as u64);
 }
 
 #[cfg(all(target_os="linux", target_arch="x86_64"))]
-pub fn load(phs: &[impl ProgHead], reader: &mut (impl Read + Seek)) {
+pub fn load(phs: &[impl ProgHead], buf: &[u8]) {
     for ph in phs {
         let prog_count: u64;
         unsafe { asm!("lea {}, [rip]", out(reg) prog_count) };
@@ -24,12 +23,6 @@ pub fn load(phs: &[impl ProgHead], reader: &mut (impl Read + Seek)) {
             writeln!(STDERR, "what the hell {:?} {:?}", range_to_be_loaded, prog_count);
         } else {
             writeln!(STDERR, "hell yeah {:?} {:?}", range_to_be_loaded, prog_count);
-        }
-        unsafe {
-            libc::mmap(ph.vaddr() as *mut c_void,
-                ph.filesz(),
-                PROT_READ | PROT_WRITE,
-                MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
         }
     }
 }

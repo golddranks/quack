@@ -87,6 +87,7 @@ pub unsafe extern "C" fn memcmp(mut s1: *const u8, mut s2: *const u8, count: usi
     0
 }
 
+#[derive(Debug)]
 pub enum MappedFile {
     ReadWrite(&'static mut [u8]),
     ReadOnly(&'static [u8]),
